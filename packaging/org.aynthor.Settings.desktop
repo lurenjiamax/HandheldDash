@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=HandheldDash Settings
+Name[zh_TW]=AYN Thor 設定
+Exec=aynthor-control --settings
+Icon=preferences-system
+Categories=Settings;HardwareSettings;
+Terminal=false

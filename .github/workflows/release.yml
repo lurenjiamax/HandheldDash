@@ -1,0 +1,58 @@
+name: Arch package and release
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install packaging tools
+        run: pacman -Syu --noconfirm --needed base-devel git
+      - uses: actions/checkout@v4
+      - name: Build Arch package
+        env:
+          HANDHELDDASH_REF: commit=${{ github.sha }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            version=$(bash -c 'source PKGBUILD; echo "$pkgver"')
+            [ "$GITHUB_REF_NAME" = "v$version" ] || { echo 'Tag and PKGBUILD version differ'; exit 1; }
+          fi
+          useradd --create-home builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          # Runtime dependencies include Thor-only BSP packages unavailable in generic Arch.
+          runuser -u builder -- env HANDHELDDASH_REF="$HANDHELDDASH_REF" makepkg --nodeps --cleanbuild --force
+          sha256sum ./*.pkg.tar.zst > SHA256SUMS
+          makepkg --printsrcinfo > .SRCINFO
+      - uses: actions/upload-artifact@v4
+        with:
+          name: handhelddash-arch
+          path: |
+            *.pkg.tar.zst
+            SHA256SUMS
+            .SRCINFO
+          if-no-files-found: error
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: handhelddash-arch
+          path: dist
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --verify-tag --title "HandheldDash $GITHUB_REF_NAME" \
+            --notes-file docs/release-notes.md

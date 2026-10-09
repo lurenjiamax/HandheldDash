@@ -1,0 +1,15 @@
+[Unit]
+Description=AYN Thor hardware D-Bus service
+After=dbus.service thorch-inputd.service inputplumber.service
+
+[Service]
+Type=dbus
+BusName=org.aynthor.Hardware1
+ExecStart=/usr/bin/aynthor-hardwared
+Restart=on-failure
+RestartSec=2
+StateDirectory=aynthor
+UMask=0022
+
+[Install]
+WantedBy=multi-user.target

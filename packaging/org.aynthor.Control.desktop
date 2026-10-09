@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=HandheldDash
+Name[zh_TW]=AYN Thor 中控台
+Comment=Hardware controls, game dashboard and key settings
+Exec=aynthor-control
+Icon=input-gaming
+Categories=Settings;HardwareSettings;Game;
+Terminal=false
+StartupWMClass=org.aynthor.Control

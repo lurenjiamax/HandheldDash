@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=AYN Thor control background listener
+Exec=systemctl --user start aynthor-control.service
+OnlyShowIn=KDE;
+NoDisplay=true
+X-KDE-autostart-phase=2
