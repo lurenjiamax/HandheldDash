@@ -1,6 +1,6 @@
 ### Intro
 **HandheldDash** is a touch-friendly handheld control panel and a system D-Bus hardware daemon for Arch Linux with KDE Plasma/Wayland. It currently supports and has been tested only on **AYN Thor running the Thorch BSP**; support for other handhelds is planned. [中文文档](README.zh-CN.md). 
-
+<img src="docs/images/control-panel.png" alt="HandheldDash control panel on AYN Thor" width="620">
 ### Feature
 
 - performance and fan profiles with editable fan curves
