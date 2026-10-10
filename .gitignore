@@ -7,3 +7,4 @@ __pycache__/
 *.pkg.tar.*
 *.src.tar.*
 /HandheldDash/
+/.history/

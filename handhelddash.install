@@ -1,4 +1,5 @@
 post_install() {
+  systemd-tmpfiles --create /usr/lib/tmpfiles.d/handhelddash-fps.conf
   printf '%s\n' 'HandheldDash: enable inputplumber.service and aynthor-hardwared.service as root.' \
     'In your KDE session: systemctl --user enable --now aynthor-control.service' \
     'Only AYN Thor with the Thorch BSP is supported. See /usr/share/doc/handhelddash/docs/installation.md.'

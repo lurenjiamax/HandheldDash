@@ -7,6 +7,74 @@ from PyQt6.QtWidgets import QLabel as QtLabel, QPushButton as QtButton
 LANGUAGE = 'en'
 # Source | English | Simplified Chinese. Traditional Chinese is the source.
 ROWS = '''
+返回鍵 + 首頁鍵|Back button + Home button|返回键 + 主页键
+重置觸控驅動|Reset touchscreen driver|重置触控驱动
+配置釋放|Release configuration|配置释放
+配置接管|Take over configuration|配置接管
+中控 CPU|Panel CPU|中控 CPU
+跟隨系統|System default|跟随系统
+僅小核|Little cores only|仅小核
+僅限制中控應用；外部啟動的應用不受限制。|Limits only the panel; externally launched apps are unrestricted.|仅限制中控应用；外部启动的应用不受限制。
+關於|About|关于
+版本|Version|版本
+原始碼|Source code|源代码
+效能策略|Performance profile|性能 profile
+風扇曲線|Fan curve|风扇曲线
+目前僅支援並測試過 AYN Thor（Thorch BSP）；未來將擴展其他掌機。|Currently supported and tested only on AYN Thor with the Thorch BSP; other handhelds are planned.|目前仅支持并测试过 AYN Thor（Thorch BSP）；未来将扩展其他掌机。
+原創程式碼：LGPL-3.0-or-later。第三方元件保留各自授權；Lucide 圖示採 ISC，PyQt6 採 GPL／商業授權。|Original code: LGPL-3.0-or-later. Third-party components retain their licenses; Lucide icons use ISC and PyQt6 uses GPL/commercial licensing.|原创代码：LGPL-3.0-or-later。第三方组件保留各自授权；Lucide 图标采用 ISC，PyQt6 采用 GPL／商业授权。
+© 2026 lurenjiamax。本程式按現狀提供，不附任何擔保。|© 2026 lurenjiamax. Provided as-is, without warranty.|© 2026 lurenjiamax。本程序按现状提供，不附任何担保。
+功率|Power|功率
+快充|Fast charging|快充
+充電功率|Charging|充电功率
+功率消耗|Power draw|功率消耗
+主屏|Top|主屏
+副屏|Bottom|副屏
+雙屏|Both|双屏
+移動目前應用|Move current app|移动当前应用
+新應用：上屏|New apps: top|新应用：上屏
+新應用：下屏|New apps: bottom|新应用：下屏
+Boost 關閉|Boost off|Boost 关闭
+Boost 開啟|Boost on|Boost 开启
+取消靜音|Unmute|取消静音
+X：最低／最高亮度；Y：響應靈敏度。|X: minimum/maximum brightness; Y: sensitivity.|X：最低／最高亮度；Y：响应灵敏度。
+讀寫掛載|Mount read/write|读写挂载
+已掛載|Mounted|已挂载
+尚未掛載|Not mounted|尚未挂载
+解鎖後端已就緒|Unlock backend ready|解锁后端已就绪
+需要匹配核心、原始金鑰與解鎖後端|Matching kernel, original keys and unlock backend required|需要匹配内核、原始密钥与解锁后端
+手柄焦點|Gamepad focus|手柄焦点
+自動切換|Automatic|自动切换
+鎖定上屏|Lock top screen|锁定上屏
+鎖定下屏|Lock bottom screen|锁定下屏
+控制桌面焦點，不能隔離自行讀取手柄的應用。|Controls desktop focus; apps reading gamepad devices directly are not isolated.|控制桌面焦点，不能隔离自行读取手柄的应用。
+上屏遮黑|Top screen blanked|上屏遮黑
+下屏遮黑|Bottom screen blanked|下屏遮黑
+CPU7 可能增加功耗，實際性能取決於負載。|CPU7 may increase power use; performance depends on the workload.|CPU7 可能增加功耗，实际性能取决于负载。
+上屏顯示|Top screen visible|上屏显示
+下屏顯示|Bottom screen visible|下屏显示
+屏幕遮黑|Screen blanked|屏幕遮黑
+UFS 中斷位置|UFS interrupt affinity|UFS 中断位置
+恢復原配置|Restore original|恢复原配置
+省電 CPU0–2|Power saving CPU0–2|省电 CPU0–2
+高性能 CPU7|Performance CPU7|高性能 CPU7
+允許 CPU|Allowed CPUs|允许 CPU
+實際 CPU|Effective CPUs|实际 CPU
+找不到 UFS 中斷|No UFS interrupt found|找不到 UFS 中断
+進階數值面板|Advanced values|高级数值面板
+編輯為自訂|Edit as custom|编辑为自定义
+風扇聯動|Fan linkage|风扇联动
+隨效能|Follow performance|随性能
+獨立調節|Independent|独立调节
+TAB 管理|Tab management|TAB 管理
+常駐|Pinned|常驻
+開啟|Open|打开
+觸控板|Touchpad|触控板
+左鍵|Left click|左键
+右鍵|Right click|右键
+下屏觸控板 → 上屏鼠標|Bottom touchpad → top-screen pointer|下屏触控板 → 上屏鼠标
+單指移動／輕點左鍵；雙指滾動／輕點右鍵。光標限制在上屏。|One finger: move / tap to click. Two fingers: scroll / tap for right click. Pointer stays on the top screen.|单指移动／轻点左键；双指滚动／轻点右键。光标限制在上屏。
+選擇常駐頁面；其他頁面可從此處開啟，離開後自動收起。設定頁始終保留。|Pin your tabs. Open other pages here; they close when you leave. Settings always remains available.|选择常驻页面；其他页面可从此处开启，离开后自动收起。设置页始终保留。
+找不到上屏鼠標接口|Top-screen pointer interface is unavailable|找不到上屏鼠标接口
 輸入模式|Input mode|输入模式
 手柄模式|Gamepad mode|手柄模式
 鼠標模式|Mouse mode|鼠标模式

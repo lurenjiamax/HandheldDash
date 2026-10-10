@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# The app copies the physical touchscreen's current calibration at runtime.
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="HandheldDash Touchscreen Relay", ENV{WL_OUTPUT}="DSI-1"

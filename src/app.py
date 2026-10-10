@@ -5,6 +5,7 @@
 import csv
 from array import array
 import math
+from functools import lru_cache
 import json
 import os
 from pathlib import Path
@@ -13,10 +14,10 @@ import subprocess
 import sys
 import time
 
-from PyQt6.QtCore import QObject, QProcess, QTimer, Qt, QSize, QRectF, QPointF, QLocale, QTranslator, QLibraryInfo, QStandardPaths, pyqtClassInfo, pyqtSlot, pyqtSignal
-from PyQt6.QtDBus import QDBusAbstractAdaptor, QDBusConnection, QDBusInterface, QDBusPendingCallWatcher, QDBusPendingReply, QDBusMessage
+from PyQt6.QtCore import QObject, QProcess, QTimer, Qt, QEvent, QSize, QRectF, QPointF, QLocale, QTranslator, QLibraryInfo, QStandardPaths, pyqtClassInfo, pyqtSlot, pyqtSignal
+from PyQt6.QtDBus import QDBus, QDBusAbstractAdaptor, QDBusConnection, QDBusInterface, QDBusPendingCallWatcher, QDBusPendingReply, QDBusMessage, QDBusVariant
 from PyQt6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap, QPolygonF, QImage, QConicalGradient, QBrush
-from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton, QTabWidget, QProgressBar, QSlider, QStackedWidget, QFormLayout, QLineEdit, QColorDialog, QInputDialog, QMenu, QStyle, QStyleOptionSlider, QStyleOptionButton, QStylePainter, QScrollArea, QSpinBox)
+from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton, QTabWidget, QProgressBar, QSlider, QStackedWidget, QFormLayout, QLineEdit, QColorDialog, QMenu, QStyle, QStyleOptionSlider, QStyleOptionButton, QStylePainter, QScrollArea, QSpinBox, QDialog, QProxyStyle)
 
 sys.path.append('/usr/lib/aynthor')
 from localization import Label as QLabel, Button as QPushButton, set_language, tr
@@ -24,19 +25,23 @@ from localization import Label as QLabel, Button as QPushButton, set_language, t
 NAME = 'org.aynthor.Hardware1'
 PATH = '/org/aynthor/Hardware1'
 APP = 'org.aynthor.Control'
+ICON_SIZE = 24
+VERSION_FILE = Path('/usr/share/aynthor/version')
+VERSION = VERSION_FILE.read_text().strip() if VERSION_FILE.is_file() else '1.0.0-dev'
 CONFIG = Path(os.environ.get('XDG_CONFIG_HOME', str(Path.home() / '.config'))) / 'aynthor'
 DATA = Path(os.environ.get('XDG_DATA_HOME', str(Path.home() / '.local/share'))) / 'aynthor'
 PREFS = CONFIG / 'settings.json'
-ACTIONS = {'escape': 'Esc', 'desktop': '顯示桌面', 'overview': '工作概覽', 'panel': '中控台', 'screenshot': '截圖', 'swap': '移至另一螢幕', 'none': '停用', 'command': '自訂指令'}
+ACTIONS = {'escape': 'Esc', 'desktop': '顯示桌面', 'overview': '工作概覽', 'panel': '中控台', 'screenshot': '截圖', 'swap': '移至另一螢幕', 'none': '停用', 'command': '自訂指令', 'reset-touchscreen':'重置觸控驅動'}
 
 
 def preferences():
-    defaults = {'back': 'escape', 'home': 'desktop', 'back_command': '', 'home_command': '', 'fps_limit': 60, 'hud': True, 'autolock': False, 'language': 'system', 'launch_screen': '', 'app_screens': {}, 'screenshot_mode': 'top'}
+    defaults = {'back': 'escape', 'home': 'desktop', 'back_command': '', 'home_command': '', 'fps_limit': 60, 'hud': True, 'autolock': False, 'language': 'system', 'launch_screen': '', 'app_screens': {}, 'screenshot_mode': 'top', 'panel_cpu_affinity': 'little', 'mangohud_mode':'release', 'back-home':'reset-touchscreen', 'back-home_command':''}
     if PREFS.exists():
         try:
             defaults.update(json.loads(PREFS.read_text()))
         except (ValueError, OSError):
             pass
+    defaults.pop('mangohud_auto',None)
     return defaults
 
 
@@ -49,10 +54,11 @@ def save(data):
 
 def mango_config(prefs):
     CONFIG.mkdir(parents=True, exist_ok=True)
-    logs = DATA / 'fps'
+    logs = Path('/var/cache/handhelddash/fps')
+    if not logs.is_dir(): logs = DATA / 'fps'
     logs.mkdir(parents=True, exist_ok=True)
     file = CONFIG / 'MangoHud.conf'
-    file.write_text(f"fps\nframetime\ncpu_stats\ngpu_stats\nfps_limit={prefs['fps_limit']}\nno_display={int(not prefs['hud'])}\noutput_folder={logs}\nautostart_log=1\nlog_interval=500\nlog_duration=3600\ncontrol=aynthor-mango-%p\n")
+    file.write_text(f"fps\nframetime\ncpu_stats\ngpu_stats\nfps_limit={prefs['fps_limit']}\nno_display={int(not prefs['hud'])}\noutput_folder={logs}\nautostart_log=1\nlog_interval=500\nlog_duration=0\ncontrol=aynthor-mango-%p\n")
     return file
 
 
@@ -61,9 +67,10 @@ class MetricIcon(QWidget):
     def __init__(self, kind):
         super().__init__()
         self.kind = kind; self.fraction = 0; self.rpm = 0; self.angle = 0; self.charging = False
-        self.setFixedSize(26,26)
+        self.setObjectName('MetricIcon'); self.setFixedSize(ICON_SIZE,ICON_SIZE)
         self.last_frame = time.monotonic()
-        self.timer = QTimer(self); self.timer.timeout.connect(self.animate); self.timer.start(80)
+        self.timer = QTimer(self); self.timer.timeout.connect(self.animate)
+        if kind == 'fan': self.timer.start(80)
 
     def animate(self):
         now = time.monotonic(); elapsed = now-self.last_frame; self.last_frame = now
@@ -76,19 +83,27 @@ class MetricIcon(QWidget):
 
     def paintEvent(self,event):
         p = QPainter(self); p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        name = {'temp':'thermometer','ram':'memory-stick','gpu':'activity'}.get(self.kind,self.kind)
+        name = {'temp':'thermometer','ram':'memory-stick','gpu':'gpu'}.get(self.kind,self.kind)
         if self.kind == 'battery' and self.charging: name='battery-charging'
-        if self.kind == 'fan': p.translate(13,13); p.rotate(self.angle); p.translate(-13,-13)
-        control_icon(name).paint(p,0,0,26,26)
+        if self.kind == 'power': name='plug-zap' if self.charging else 'zap'
+        if self.kind == 'fan': p.translate(ICON_SIZE/2,ICON_SIZE/2); p.rotate(self.angle); p.translate(-ICON_SIZE/2,-ICON_SIZE/2)
+        control_icon(name).paint(p,0,0,ICON_SIZE,ICON_SIZE)
 
 
+@lru_cache(maxsize=128)
 def control_icon(kind, enabled=False, color='#a68bff'):
-    names = {'lock': 'lock' if enabled else 'lock-open', 'speed': 'gauge',
+    names = {'speed': 'gauge',
              'smart': 'sparkles', 'memory': 'memory-stick', 'gamepad': 'gamepad-2',
              'rgb': 'palette', 'battery': 'battery-charging'}
     name = names.get(kind, kind)
     local = Path(__file__).resolve().parent.parent / 'packaging/icons' / (name + '.svg')
     return QIcon(str(local if local.exists() else Path('/usr/share/aynthor/icons') / (name + '.svg')))
+
+
+class ControlStyle(QProxyStyle):
+    def pixelMetric(self,metric,option=None,widget=None):
+        if metric == QStyle.PixelMetric.PM_SmallIconSize: return ICON_SIZE
+        return super().pixelMetric(metric,option,widget)
 
 
 class TaskButton(QPushButton):
@@ -130,11 +145,20 @@ class TouchSlider(QSlider):
         self.commit_timer.timeout.connect(lambda:self.edited.emit(self.value()))
         self.sliderReleased.connect(self.commit)
 
+    def paintEvent(self,event):
+        p=QPainter(self); p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        box=QRectF(12,(self.height()-16)/2,max(1,self.width()-24),16)
+        option=QStyleOptionSlider(); self.initStyleOption(option)
+        fraction=(self.value()-self.minimum())/max(1,self.maximum()-self.minimum())
+        x=box.right()-fraction*box.width() if option.upsideDown else box.left()+fraction*box.width()
+        color=QColor('#a68bff' if self.isEnabled() else '#666477')
+        p.setPen(Qt.PenStyle.NoPen); p.setBrush(QColor('#303144')); p.drawRoundedRect(box,8,8)
+        fill=QRectF(x if option.upsideDown else box.left(),box.top(),fraction*box.width(),box.height())
+        p.setBrush(color); p.drawRoundedRect(fill,8,8); p.drawEllipse(QPointF(x,box.center().y()),10,10)
+
     def move_to(self, point):
         option = QStyleOptionSlider(); self.initStyleOption(option)
-        groove = self.style().subControlRect(QStyle.ComplexControl.CC_Slider,option,QStyle.SubControl.SC_SliderGroove,self)
-        handle = self.style().subControlRect(QStyle.ComplexControl.CC_Slider,option,QStyle.SubControl.SC_SliderHandle,self)
-        value = QStyle.sliderValueFromPosition(self.minimum(),self.maximum(),round(point.x()-groove.x()-handle.width()/2),max(1,groove.width()-handle.width()),option.upsideDown)
+        value = QStyle.sliderValueFromPosition(self.minimum(),self.maximum(),round(point.x()-12),max(1,self.width()-24),option.upsideDown)
         if value != self.value():
             self.setValue(value)
             if not self.commit_timer.isActive(): self.commit_timer.start()
@@ -166,11 +190,12 @@ class TouchSlider(QSlider):
 
 class StateButton(QPushButton):
     """Tap cycles values; a hold opens the same choices without cycling on release."""
-    def __init__(self, title, options, callback):
+    def __init__(self, title, options, callback, icon_only=False):
         super().__init__(title)
+        self.icon_only=icon_only
         self.title = title; self.options = options; self.callback = callback
         self.current = options[0][0]; self.held = False; self.menu = None
-        self.setIconSize(QSize(22,22)); self.setMinimumHeight(32)
+        self.setIconSize(QSize(ICON_SIZE,ICON_SIZE)); self.setMinimumHeight(32)
         self.hold_timer = QTimer(self); self.hold_timer.setSingleShot(True)
         self.hold_timer.setInterval(550); self.hold_timer.timeout.connect(self.open_options)
         self.pressed.connect(self.begin_hold); self.released.connect(self.hold_timer.stop)
@@ -193,15 +218,17 @@ class StateButton(QPushButton):
 
     def render(self):
         option = next((o for o in self.options if o[0] == self.current),None)
-        self.setText(option[1] if option else self.title)
+        label=option[1] if option else self.title
+        self.setText('' if self.icon_only else label)
         self.setIcon(control_icon(option[2] if option else 'gauge'))
-        self.setAccessibleName(tr(self.title)+': '+self.text())
-        self.setToolTip(tr(self.title))
+        self.setAccessibleName(tr(self.title)+': '+tr(label))
+        self.setToolTip(tr(self.title)+': '+tr(label) if self.icon_only else tr(self.title))
 
     def open_options(self):
         if not self.isDown(): return
         self.held = True; self.setDown(False)
-        self.menu = QMenu(self); self.menu.setTitle(tr(self.title))
+        self.menu = QMenu(self.window()); self.menu.setTitle(tr(self.title))
+        self.menu.setMaximumHeight(max(120,self.screen().availableGeometry().height()-40))
         for value,title,icon in self.options:
             action = self.menu.addAction(control_icon(icon),tr(title))
             action.setCheckable(True); action.setChecked(value == self.current)
@@ -213,13 +240,28 @@ class StateButton(QPushButton):
         if not self.rect().contains(event.position().toPoint()): self.hold_timer.stop()
         super().mouseMoveEvent(event)
 
+    def sizeHint(self):
+        hint=super().sizeHint()
+        hint.setWidth(max(hint.width(),self.fontMetrics().horizontalAdvance(self.text())+ICON_SIZE+32))
+        return hint
+
+    def minimumSizeHint(self): return self.sizeHint()
+
     def paintEvent(self,event):
         painter = QStylePainter(self); option = QStyleOptionButton(); self.initStyleOption(option)
         painter.drawControl(QStyle.ControlElement.CE_PushButtonBevel,option)
-        side = self.iconSize().width(); x = 14
+        side = ICON_SIZE; x = 0 if self.objectName() == 'MetricValue' else 12
         self.icon().paint(painter,x,(self.height()-side)//2,side,side,mode=QIcon.Mode.Normal if self.isEnabled() else QIcon.Mode.Disabled)
         painter.setPen(self.palette().buttonText().color())
-        painter.drawText(self.rect().adjusted(x+side+10,0,-10,0),Qt.AlignmentFlag.AlignLeft|Qt.AlignmentFlag.AlignVCenter,self.text())
+        painter.drawText(self.rect().adjusted(x+side+8,0,-12,0),Qt.AlignmentFlag.AlignLeft|Qt.AlignmentFlag.AlignVCenter,self.text())
+
+
+class TemperatureButton(StateButton):
+    def render(self):
+        super().render()
+        option=next((o for o in self.options if o[0] == self.current),None)
+        self.setText(option[1].split(' · ')[-1] if option else '— °C')
+
 
 
 class ScreenshotButton(StateButton):
@@ -375,14 +417,52 @@ class LightingPad(QWidget):
 
 
 class FanCurve(QWidget):
+    pointChanged = pyqtSignal(int,int,int)
     def __init__(self):
         super().__init__(); self.curve=None; self.temperature=None
-        self.setMinimumHeight(128)
+        self.editable=False; self.selected=None; self.dragging=False
+        self.setMinimumHeight(200); self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+
+    def plot_box(self): return QRectF(42,14,self.width()-58,self.height()-42)
+
+    def move_point(self,temp,percent):
+        if not self.editable or self.selected is None: return
+        i=self.selected; temps=self.curve['temperatures']; speeds=self.curve['pwm']
+        temp=max(20 if i==0 else temps[i-1]//1000+1,min(95 if i==6 else temps[i+1]//1000-1,round(temp)))
+        percent=100 if i==6 else max(round(speeds[i-1]/2.55) if i else 0,min(round(speeds[i+1]/2.55),round(percent)))
+        self.pointChanged.emit(i,temp,percent)
+
+    def mousePressEvent(self,event):
+        if event.button()!=Qt.MouseButton.LeftButton or not self.editable or not self.curve:
+            super().mousePressEvent(event); return
+        box=self.plot_box(); pos=event.position()
+        distances=[math.hypot(pos.x()-(box.left()+(t/1000-20)/80*box.width()),pos.y()-(box.bottom()-v/255*box.height()))
+                   for t,v in zip(self.curve['temperatures'],self.curve['pwm'])]
+        i=min(range(len(distances)),key=distances.__getitem__)
+        if distances[i]<=30:
+            self.selected=i; self.dragging=True; self.setFocus(); self.update(); event.accept()
+
+    def mouseMoveEvent(self,event):
+        if not self.dragging: super().mouseMoveEvent(event); return
+        box=self.plot_box(); pos=event.position()
+        self.move_point(20+(pos.x()-box.left())/box.width()*80,(box.bottom()-pos.y())/box.height()*100)
+        event.accept()
+
+    def mouseReleaseEvent(self,event):
+        self.dragging=False; super().mouseReleaseEvent(event)
+
+    def keyPressEvent(self,event):
+        if self.editable and self.selected is not None and event.key() in (Qt.Key.Key_Left,Qt.Key.Key_Right,Qt.Key.Key_Up,Qt.Key.Key_Down):
+            i=self.selected; temp=self.curve['temperatures'][i]/1000; percent=self.curve['pwm'][i]/2.55
+            self.move_point(temp+(1 if event.key()==Qt.Key.Key_Right else -1 if event.key()==Qt.Key.Key_Left else 0),
+                            percent+(1 if event.key()==Qt.Key.Key_Up else -1 if event.key()==Qt.Key.Key_Down else 0))
+            event.accept(); return
+        super().keyPressEvent(event)
 
     def paintEvent(self,event):
         if not self.curve: return
         p=QPainter(self); p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        box=QRectF(42,14,self.width()-58,self.height()-42)
+        box=self.plot_box()
         def point(temp,pwm): return QPointF(box.left()+(temp-20)/80*box.width(),box.bottom()-pwm/255*box.height())
         p.setPen(QPen(QColor('#45465e'),1))
         for temp in (20,40,60,80,100):
@@ -391,11 +471,19 @@ class FanCurve(QWidget):
         for percent in (0,50,100):
             y=point(20,percent*2.55).y(); p.drawLine(QPointF(box.left(),y),QPointF(box.right(),y))
             p.setPen(QColor('#b8b5ca')); p.drawText(QRectF(0,y-10,37,20),Qt.AlignmentFlag.AlignRight|Qt.AlignmentFlag.AlignVCenter,f'{percent}%'); p.setPen(QPen(QColor('#45465e'),1))
-        points=[point(20,0)]; previous=0
+        points=[point(min(20,self.curve['temperatures'][0]/1000-5),0),point(self.curve['temperatures'][0]/1000-5,0)]
         for temp,pwm in zip(self.curve['temperatures'],self.curve['pwm']):
-            points.extend([point(temp/1000,previous),point(temp/1000,pwm)]); previous=pwm
-        points.append(point(100,previous))
-        p.setPen(QPen(QColor('#bca6ff'),2.5)); p.drawPolyline(QPolygonF(points))
+            points.append(point(temp/1000,pwm))
+        points.append(point(100,255))
+        p.save(); p.setClipRect(box)
+        p.setPen(QPen(QColor('#bca6ff'),2.5)); p.drawPolyline(QPolygonF(points)); p.restore()
+        for i,(temp,pwm) in enumerate(zip(self.curve['temperatures'],self.curve['pwm'])):
+            pos=point(temp/1000,pwm)
+            p.setPen(QPen(QColor('#bca6ff'),2)); p.setBrush(QColor('#bca6ff' if self.editable else '#303144'))
+            p.drawEllipse(pos,8 if i==self.selected else 6,8 if i==self.selected else 6)
+            if i==self.selected:
+                p.setPen(QColor('#ffffff'))
+                p.drawText(QRectF(max(box.left(),min(pos.x()-65,box.right()-130)),max(box.top(),pos.y()-32),130,22),Qt.AlignmentFlag.AlignCenter,f'{temp/1000:.0f} °C · {pwm/2.55:.0f}%')
         if self.temperature is not None:
             x=point(max(20,min(100,self.temperature)),0).x()
             p.setPen(QPen(QColor('#7de2ad'),1.5,Qt.PenStyle.DashLine)); p.drawLine(QPointF(x,box.top()),QPointF(x,box.bottom()))
@@ -456,11 +544,36 @@ class ControlEndpoint(QDBusAbstractAdaptor):
     @pyqtSlot()
     def Screenshot(self): self.parent().screenshot()
 
+    def configure_panel_focus(self):
+        import configparser
+        file=CONFIG.parent/'kwinrulesrc'
+        rules=configparser.ConfigParser(interpolation=None,strict=False)
+        rules.optionxform=str
+        if file.exists(): rules.read(file,encoding='utf-8')
+        if not rules.has_section('General'): rules.add_section('General')
+        ids=[value for value in rules.get('General','rules',fallback='').split(',') if value]
+        rule='handhelddash-panel'
+        if rule not in ids: ids.append(rule)
+        rules['General']['rules']=','.join(ids)
+        rules['General']['count']=str(len(ids))
+        rules[rule]={'Description':'HandheldDash panel preserves game focus',
+                     'wmclass':'org.aynthor.Control','wmclassmatch':'1',
+                     'title':tr('AYN Thor 中控台'),'titlematch':'1',
+                     'acceptfocus':'false','acceptfocusrule':'2'}
+        file.parent.mkdir(parents=True,exist_ok=True)
+        stage=file.with_suffix('.handhelddash-new')
+        with stage.open('w',encoding='utf-8') as stream: rules.write(stream,space_around_delimiters=False)
+        stage.replace(file)
+        QDBusInterface('org.kde.KWin','/KWin','org.kde.KWin',self.session).call('reconfigure')
+
     @pyqtSlot()
     def Toggle(self): self.parent().Toggle()
 
     @pyqtSlot()
     def Settings(self): self.parent().Settings()
+
+    @pyqtSlot()
+    def ExitTouchpad(self): self.parent().exit_touchpad()
 
     @pyqtSlot(str,result=bool)
     def Snapshot(self,path): return self.parent().Snapshot(path)
@@ -468,10 +581,68 @@ class ControlEndpoint(QDBusAbstractAdaptor):
     @pyqtSlot(str)
     def WindowList(self,raw): self.parent().WindowList(raw)
 
+    @pyqtSlot(str)
+    def CursorPosition(self,raw):
+        try: x,y = json.loads(raw)
+        except (ValueError,TypeError): return
+        if not isinstance(x,(int,float)) or not isinstance(y,(int,float)): return
+        self.parent().cursor_position = QPointF(x,y)
+
+
+class Touchpad(QWidget):
+    def __init__(self, panel):
+        super().__init__(); self.panel = panel
+        self.setMinimumHeight(160)
+        self.heartbeat = QTimer(self); self.heartbeat.timeout.connect(self.send_region); self.heartbeat.setInterval(250)
+
+    def send_region(self, enabled=True):
+        region = []
+        if enabled and self.isVisible():
+            screen = next((s for s in QApplication.screens() if s.name() == 'DSI-1'),None)
+            if screen:
+                geometry = screen.geometry(); origin = self.mapToGlobal(self.rect().topLeft())-geometry.topLeft()
+                region = [round(origin.x()*10000/geometry.width()),round(origin.y()*10000/geometry.height()),
+                          round((origin.x()+self.width())*10000/geometry.width()),round((origin.y()+self.height())*10000/geometry.height())]
+                region = [max(0,min(10000,v)) for v in region]
+                if region[0] >= region[2] or region[1] >= region[3]: region = []
+        message = QDBusMessage.createMethodCall(NAME,PATH,NAME,'TouchpadRegion')
+        top = next((s for s in QApplication.screens() if s.name() == 'DSI-2'),QApplication.primaryScreen())
+        rotation = top.angleBetween(Qt.ScreenOrientation.LandscapeOrientation,top.orientation()) if top else 0
+        message.setArguments([json.dumps({'region':region,'rotation':rotation,'calibration':self.panel.touch_calibration},separators=(',',':'))])
+        self.panel.bus.call(message,QDBus.CallMode.NoBlock)
+
+    def showEvent(self,event):
+        super().showEvent(event)
+        self.panel.focus_upper(); self.panel.center_pointer(); self.send_region(); self.heartbeat.start()
+
+    def resizeEvent(self,event):
+        super().resizeEvent(event)
+        if self.isVisible(): self.send_region()
+
+    def hideEvent(self,event):
+        self.heartbeat.stop(); self.send_region(False)
+        self.panel.start('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.unloadScript','aynthor-touchpad-focus')
+        super().hideEvent(event)
+
+    def paintEvent(self,event):
+        p = QPainter(self); p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setBrush(QColor('#303144')); p.setPen(QPen(QColor('#79718d'),1))
+        p.drawRoundedRect(QRectF(self.rect()).adjusted(1,1,-1,-1),18,18)
+
 
 class Panel(QWidget):
     def __init__(self):
         super().__init__()
+        self.system_cpus = os.sched_getaffinity(0)
+        capacities = {}
+        for cpu in self.system_cpus:
+            node = Path(f'/sys/devices/system/cpu/cpu{cpu}')
+            try:
+                capacity = node/'cpu_capacity'
+                capacities[cpu] = int((capacity if capacity.exists() else node/'cpufreq/cpuinfo_max_freq').read_text())
+            except (OSError,ValueError):
+                capacities = {}; break
+        self.little_cpus = {cpu for cpu,value in capacities.items() if value == min(capacities.values())} if capacities else self.system_cpus.copy()
         self.prefs = preferences()
         set_language(self.prefs['language'])
         self.qt_translator = QTranslator(self); self.translate_dialogs()
@@ -482,11 +653,16 @@ class Panel(QWidget):
         self.write_queue = {}; self.write_active = None; self.write_revision = 0
         self.write_timer = QTimer(self); self.write_timer.setSingleShot(True); self.write_timer.timeout.connect(self.flush_writes)
         self.audio_queue = {}; self.audio_active = False; self.audio_revision = 0
+        self.cursor_position = None
+        self.touch_calibration = [1,0,0,0,1,0]
+        self.screen_blanks = {}
         self.error_text = None
         self.setWindowTitle(tr('AYN Thor 中控台'))
         self.setObjectName('ThorPanel')
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
         self.setWindowFlag(Qt.WindowType.FramelessWindowHint)
+        self.setWindowFlag(Qt.WindowType.WindowDoesNotAcceptFocus)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setMinimumSize(470, 420)
         self.resize(604, 520)
         self.bus = QDBusConnection.systemBus()
@@ -496,29 +672,32 @@ class Panel(QWidget):
         if not self.bus.connect(NAME, PATH, NAME, 'Button', self.on_button):
             raise RuntimeError('Cannot subscribe to hardware button events')
         self.session = QDBusConnection.sessionBus()
+        self.configure_panel_focus()
         self.session.registerService(APP)
         self.endpoint = ControlEndpoint(self)
         self.session.registerObject('/Control', self, QDBusConnection.RegisterOption.ExportAdaptors)
-        self.setStyleSheet('''
+        QApplication.instance().setStyleSheet('''
             QWidget { background:#222331; color:#f2efff; font-size:14px; }
             QWidget#ThorPanel { background:#222331; }
             QLabel#Title { font-size:22px; font-weight:700; }
             QLabel#Fps { font-size:36px; font-weight:800; color:#bca6ff; }
             QWidget#Gauge { background:#303144; border-radius:12px; }
             QWidget#Gauge QWidget { background:transparent; }
+            QWidget#MetricIcon { background:transparent; }
+            QPushButton#MetricValue { background:transparent; border:0; border-radius:0; padding:0; min-height:0; }
+            QWidget#Gauge QProgressBar { background:#45465e; }
             QProgressBar { background:#45465e; border:0; border-radius:3px; height:6px; }
             QProgressBar::chunk { background:#a68bff; border-radius:3px; }
             QPushButton { background:#36374a; border:1px solid #45465e; border-radius:13px; padding:10px; min-height:24px; }
             QPushButton:pressed { background:#4c4268; }
             QPushButton:checked { background:#7755d9; border-color:#a58cf8; }
             QPushButton:disabled { color:#79798f; }
-            QMenu { background:#303144; border:1px solid #79718d; padding:6px; }
-            QMenu::item { padding:12px 20px; } QMenu::item:selected { background:#7755d9; }
+            QMenu { background:#303144; color:#f2efff; border:1px solid #45465e; border-radius:8px; padding:6px; menu-scrollable:1; }
+            QMenu::item { padding:10px 16px; min-height:24px; border-radius:6px; } QMenu::item:selected { background:#7755d9; }
+            QMenu::item:disabled { color:#79798f; } QMenu::separator { height:1px; background:#45465e; margin:5px; }
             QTabWidget::pane { border:0; } QTabBar::tab { padding:10px 18px; background:#303144; }
             QTabBar::tab:selected { background:#7755d9; }
             QLineEdit { background:#303144; border:1px solid #45465e; border-radius:8px; padding:7px; }
-            QSlider::groove:horizontal { height:12px; background:#45465e; border-radius:6px; }
-            QSlider::handle:horizontal { width:26px; margin:-7px 0; border-radius:13px; background:#a68bff; }
             QTabWidget::tab-bar { alignment:center; } QLabel#Notice { color:#b8b5ca; font-size:12px; }
         ''')
         root = QVBoxLayout(self)
@@ -531,22 +710,45 @@ class Panel(QWidget):
         close = QPushButton('×'); close.setFixedWidth(44); close.clicked.connect(self.hide); header.addWidget(close)
         root.addLayout(header)
         self.tabs = QTabWidget(); self.tabs.setTabPosition(QTabWidget.TabPosition.South); root.addWidget(self.tabs)
-        self.make_control(); self.make_modes(); self.make_tasks(); self.make_screen(); self.make_fan(); self.make_lighting(); self.make_settings()
+        self.page_titles = []
+        self.make_control(); self.make_tasks(); self.make_screen(); self.make_fan(); self.make_lighting(); self.make_touchpad(); self.make_settings()
+        resident = self.prefs.get('resident_tabs',self.page_titles)
+        self.tabs.setCurrentIndex(next((i for i,title in enumerate(self.page_titles) if title in resident),self.settings_index))
+        self.tabs.currentChanged.connect(self.update_tabs)
+        self.update_tabs()
         self.notices = []
         for i in range(self.tabs.count()):
-            label = QLabel('連線到硬體服務…'); label.setObjectName('Notice'); label.setWordWrap(True)
+            if i == self.touchpad_index: continue
+            label = QLabel(''); label.setObjectName('Notice'); label.setWordWrap(True); label.hide()
             self.tabs.widget(i).layout().addWidget(label); self.notices.append(label)
         self.timer = QTimer(self); self.timer.timeout.connect(self.refresh); self.timer.start(2000)
         self.desktop_visible = False
         self.install_placement()
+        QTimer.singleShot(1000,self.configure_pointer)
+        for screen in QApplication.screens():
+            screen.orientationChanged.connect(lambda orientation:self.configure_pointer())
         self.refresh()
+        QTimer.singleShot(0,lambda:self.set_cpu_affinity(self.prefs['panel_cpu_affinity'],False))
 
     def install_placement(self):
         CONFIG.mkdir(parents=True, exist_ok=True)
         script = CONFIG / 'placement.js'
         rules = json.dumps(self.prefs.get('app_screens',{})); default = json.dumps(self.prefs.get('launch_screen',''))
-        script.write_text('const rules = '+rules+'; const defaultScreen = '+default+';'+'''
+        focus = json.dumps(self.prefs.get('gamepad_focus','auto'))
+        script.write_text('const rules = '+rules+'; const defaultScreen = '+default+'; const gamepadFocus = '+focus+';'+'''
+registerShortcut('HandheldDash Gamepad Focus','Focus selected gamepad screen','',function() {
+    if (gamepadFocus === 'auto') return;
+    const output = gamepadFocus === 'top' ? 'DSI-2' : 'DSI-1';
+    const target = workspace.stackingOrder.slice().reverse().find(w => w.normalWindow && !w.minimized && w.output && w.output.name === output && String(w.resourceClass).toLowerCase().indexOf('org.aynthor.control') < 0);
+    if (target && workspace.activeWindow !== target) workspace.activeWindow = target;
+});
 function place(w, existing) {
+    const blank = /^HandheldDash Blank (DSI-[12])$/.exec(w.caption);
+    if (blank) {
+        const output = workspace.screens.find(s => s.name === blank[1]);
+        if (output) { workspace.sendClientToScreen(w,output); w.keepAbove=true; w.fullScreen=true; }
+        return;
+    }
     const app = String(w.resourceClass).toLowerCase();
     if (app.indexOf('org.aynthor.control') < 0) {
         if (existing || !w.normalWindow || w.skipTaskbar) return;
@@ -565,53 +767,166 @@ function place(w, existing) {
 }
 workspace.windowAdded.connect(w => place(w,false));
 workspace.windowList().forEach(w => place(w,true));
+function reportCursor() {
+    callDBus('org.aynthor.Control','/Control','org.aynthor.Control','CursorPosition',JSON.stringify([workspace.cursorPos.x,workspace.cursorPos.y]));
+}
+workspace.cursorPosChanged.connect(reportCursor);
+reportCursor();
 ''')
         self.start('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.unloadScript','aynthor-placement')
         QTimer.singleShot(300, lambda: self.start('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.loadScript',str(script),'aynthor-placement'))
         QTimer.singleShot(600, lambda: self.start('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.start'))
 
     def notify(self,text):
-        for label in self.notices: label.setText(text)
+        for label in self.notices:
+            label.setText(text); label.setVisible(bool(text))
 
     def page(self, title):
         widget = QWidget(); layout = QVBoxLayout(widget)
+        self.page_titles.append(title)
         self.tabs.addTab(widget, tr(title))
         return layout
 
+    def update_tabs(self, index=None):
+        resident = self.prefs.get('resident_tabs',self.page_titles)
+        current = self.tabs.currentIndex()
+        for i,title in enumerate(self.page_titles):
+            self.tabs.setTabVisible(i,title in resident or i == self.settings_index or i == current)
+
+    def pin_tab(self, title, pinned):
+        resident = set(self.prefs.get('resident_tabs',self.page_titles))
+        if pinned: resident.add(title)
+        else: resident.discard(title)
+        self.set_pref('resident_tabs',[t for t in self.page_titles if t in resident])
+        self.update_tabs()
+
+    def open_tab(self, index):
+        self.tabs.setTabVisible(index,True); self.tabs.setCurrentIndex(index)
+
+    def make_touchpad(self):
+        self.touchpad_index = self.tabs.count()
+        layout = self.page('觸控板')
+        layout.setContentsMargins(0,0,0,0)
+        self.touchpad = Touchpad(self); layout.addWidget(self.touchpad,1)
+
+    def exit_touchpad(self):
+        if self.touchpad.isVisible():
+            self.touchpad.heartbeat.stop(); self.touchpad.send_region(False)
+            self.open_tab(0)
+
+    def keyPressEvent(self,event):
+        if event.key() == Qt.Key.Key_Escape and self.touchpad.isVisible():
+            self.exit_touchpad(); event.accept(); return
+        super().keyPressEvent(event)
+
+    def focus_upper(self):
+        name = 'aynthor-touchpad-focus'
+        script = CONFIG/(name+'.js')
+        script.write_text("""
+const target = workspace.stackingOrder.slice().reverse().find(w => w.normalWindow && !w.minimized && w.output && w.output.name === 'DSI-2' && String(w.resourceClass).toLowerCase().indexOf('org.aynthor.control') < 0);
+if (target) workspace.activeWindow = target;
+registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode','Esc',function() {
+    callDBus('org.aynthor.Control','/Control','org.aynthor.Control','ExitTouchpad');
+});
+""")
+        self.start('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.unloadScript',name)
+        QTimer.singleShot(150,lambda:self.touchpad.isVisible() and self.start('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.loadScript',str(script),name))
+        QTimer.singleShot(300,lambda:self.touchpad.isVisible() and self.start('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.start'))
+
+    def configure_pointer(self):
+        manager = QDBusInterface('org.kde.KWin','/org/kde/KWin/InputDevice','org.kde.KWin.InputDeviceManager',self.session)
+        manager.setTimeout(1000)
+        reply = manager.call('ListPointers')
+        if reply.type() == QDBusMessage.MessageType.ErrorMessage: return
+        names = list(reply.arguments()[0])
+        touches = manager.call('ListTouch')
+        if touches.type() != QDBusMessage.MessageType.ErrorMessage: names += list(touches.arguments()[0])
+        devices = {}
+        for name in dict.fromkeys(names):
+            device = QDBusInterface('org.kde.KWin','/org/kde/KWin/InputDevice/'+name,'org.freedesktop.DBus.Properties',self.session)
+            device.setTimeout(1000)
+            result = device.call('Get','org.kde.KWin.InputDevice','name')
+            if result.type() != QDBusMessage.MessageType.ErrorMessage: devices[result.arguments()[0]] = device
+        source = devices.get('bottom_touchscreen')
+        matrix = None
+        if source:
+            result = source.call('Get','org.kde.KWin.InputDevice','calibrationMatrix')
+            if result.type() != QDBusMessage.MessageType.ErrorMessage:
+                matrix = result.arguments()[0]
+                try:
+                    values = [float(v) for v in matrix.split(',')]
+                    if len(values) == 16 and all(math.isfinite(v) and abs(v)<=4 for v in values):
+                        self.touch_calibration = [values[i] for i in (0,1,2,4,5,6)]
+                    else: matrix = None
+                except (ValueError,AttributeError): matrix = None
+        for name,device in devices.items():
+            if name == 'HandheldDash Pointer Placement':
+                device.call('Set','org.kde.KWin.InputDevice','pointerAccelerationProfileFlat',QDBusVariant(True))
+                device.call('Set','org.kde.KWin.InputDevice','pointerAcceleration',QDBusVariant(0.0))
+            elif name == 'HandheldDash Touchscreen Relay':
+                device.call('Set','org.kde.KWin.InputDevice','outputName',QDBusVariant('DSI-1'))
+                if matrix is not None: device.call('Set','org.kde.KWin.InputDevice','calibrationMatrix',QDBusVariant(matrix))
+            elif name == 'HandheldDash Virtual Touchpad' and not self.prefs.get('touchpad_raw_initialized'):
+                result = device.call('Set','org.kde.KWin.InputDevice','tapToClick',QDBusVariant(True))
+                device.call('Set','org.kde.KWin.InputDevice','tapAndDrag',QDBusVariant(False))
+                device.call('Set','org.kde.KWin.InputDevice','tapDragLock',QDBusVariant(False))
+                if result.type() != QDBusMessage.MessageType.ErrorMessage: self.set_pref('touchpad_raw_initialized',True)
+
+    def center_pointer(self):
+        screen = next((s for s in QApplication.screens() if s.name() == 'DSI-2'),None)
+        if screen is None or self.cursor_position is None:
+            self.notify(tr('找不到上屏鼠標接口')); return
+        rect = screen.geometry(); dx=dy=0
+        if not rect.contains(self.cursor_position.toPoint()):
+            delta = QPointF(rect.center())-self.cursor_position
+            dx,dy = int(delta.x()),int(delta.y())
+        if dx or dy: self.call('Pointer',[max(-32767,min(32767,dx)),max(-32767,min(32767,dy)),0,0],quiet=True)
+
     def button(self, text, callback, checkable=False):
-        button = QPushButton(text); button.setCheckable(checkable); button.clicked.connect(callback)
+        button = QPushButton(text); button.setIconSize(QSize(ICON_SIZE,ICON_SIZE)); button.setCheckable(checkable); button.clicked.connect(callback)
         return button
 
     def make_control(self):
         layout = self.page('中控')
         top = QHBoxLayout()
         self.fps = QLabel('— FPS'); self.fps.setObjectName('Fps'); top.addWidget(self.fps)
-        right = QVBoxLayout()
-        self.fps_mode = StateButton('FPS',[(0,'不限幀','infinity'),(30,'30 FPS','gauge'),(60,'60 FPS','activity'),(120,'120 FPS','zap')],self.set_fps_limit)
-        self.fps_mode.show_value(self.prefs['fps_limit']); right.addWidget(self.fps_mode)
-        self.fps_source = QLabel('等待遊戲'); self.fps_source.setObjectName('Notice'); self.fps_source.setWordWrap(True); right.addWidget(self.fps_source)
-        top.addLayout(right); layout.addLayout(top)
+        self.fps_source = QLabel(''); self.fps_source.setObjectName('Notice'); self.fps_source.setWordWrap(True); top.addWidget(self.fps_source,1)
+        self.fps_mode = StateButton('FPS',[(0,'不限幀','infinity'),(30,'30 FPS','fps-30'),(60,'60 FPS','fps-60'),(120,'120 FPS','fps-120')],self.set_fps_limit,icon_only=True)
+        self.fps_mode.setStyleSheet('padding:5px 10px; min-height:22px;')
+        self.fps_mode.setIconSize(QSize(32,32)); self.fps_mode.setFixedSize(52,42)
+        self.fps_mode.show_value(self.prefs['fps_limit']); top.addWidget(self.fps_mode)
+        layout.addLayout(top)
         grid = QGridLayout(); grid.setVerticalSpacing(6); layout.addLayout(grid)
-        self.autolock = StateButton('自動鎖定',[(False,'鎖定停用','lock-open'),(True,'自動鎖定','lock')],self.set_autolock)
+        self.autolock = StateButton('Caffine',[(False,'Caffine','lock-open'),(True,'Caffine','lock')],self.set_autolock)
         try:
             self.prefs['autolock'] = subprocess.check_output(['kreadconfig6','--file','kscreenlockerrc','--group','Daemon','--key','Autolock','--default','true'],text=True,timeout=5).strip() == 'true'
         except (OSError,subprocess.SubprocessError): pass
         self.autolock.show_value(self.prefs['autolock'])
         self.performance = StateButton('效能', [('quiet','安靜','leaf'),('standard','標準','gauge'),('performance','高效能','zap')], lambda v:self.set('performance',[v]))
-        self.smart = StateButton('智慧模式',[(False,'手動調節','sliders-horizontal'),(True,'智慧調節','sparkles')],lambda v:self.set('smart',['on' if v else 'off']))
+        self.fan_link_control = StateButton('風扇聯動',self.fan_link_choices(),self.set_fan_follow)
         self.input_mode = StateButton('輸入模式',[('gamepad','手柄模式','gamepad'),('mouse','鼠標模式','mouse')],lambda v:self.set('joystick',[v]))
-        self.joystick = StateButton('手柄布局',[(None,'布局不支援','gamepad')],lambda v:None)
-        self.joystick.setEnabled(False)
+        self.gamepad_focus = StateButton('手柄焦點',[('auto','自動切換','gamepad'),('top','鎖定上屏','monitor'),('bottom','鎖定下屏','monitor')],self.set_gamepad_focus)
+        self.gamepad_focus.show_value(self.prefs.get('gamepad_focus','auto'))
+        self.gamepad_focus.setToolTip(tr('控制桌面焦點，不能隔離自行讀取手柄的應用。'))
         bypass = StateButton('旁路供電',[(None,'旁路不支援','battery')],lambda v:None); bypass.setEnabled(False)
         self.vibration = StateButton('震動',[(False,'震動關閉','bell-off'),(True,'震動開啟','vibration')],lambda v:self.set('vibration',['on' if v else 'off']))
         self.rgb = StateButton('氛圍燈',self.lighting_choices(),self.set_rgb_mode)
-        for i, button in enumerate([self.autolock,self.performance,self.smart,self.input_mode,self.joystick,bypass,self.vibration,self.rgb]):
+        for i, button in enumerate([self.autolock,self.performance,self.fan_link_control,self.input_mode,self.gamepad_focus,bypass,self.vibration,self.rgb]):
             button.setStyleSheet('padding:5px 10px; min-height:22px;'); grid.addWidget(button,i//2,i%2)
         gauges = QGridLayout(); self.gauges = {}; self.metric_icons = {}
-        for i,(key,title,icon) in enumerate([('cpu','CPU','cpu'),('gpu','GPU','video-display'),('temp','溫度','temperature-normal'),('fan','風扇','fan'),('ram','RAM','memory'),('battery','電池','battery')]):
+        for i,(key,title,icon) in enumerate([('cpu','CPU','cpu'),('gpu','GPU','video-display'),('temp','溫度','temperature-normal'),('fan','風扇','fan'),('ram','RAM','memory'),('battery','功率','zap')]):
             card = QWidget(); card.setObjectName('Gauge'); box = QVBoxLayout(card); box.setContentsMargins(9,7,9,7); box.setSpacing(4)
-            row = QHBoxLayout(); image = MetricIcon(key); self.metric_icons[key] = image; row.addWidget(image)
-            value = QLabel(title); row.addWidget(value,1); box.addLayout(row)
+            row = QHBoxLayout(); row.setSpacing(8); image = MetricIcon('power' if key == 'battery' else key); self.metric_icons[key] = image
+            if key == 'temp':
+                value=TemperatureButton('溫度',[('battery','電池 · — °C','thermometer')],lambda v:self.select_temperature(v)); self.temperature_button=value
+                value.setObjectName('MetricValue'); value.setMinimumHeight(24); value.setMaximumHeight(28)
+                value.show_value(self.prefs.get('temperature_sensor','battery'))
+            else:
+                row.addWidget(image); value = QLabel(title)
+                if key == 'battery':
+                    self.power_temperature = QLabel('— °C'); row.addWidget(self.power_temperature)
+                    value.setAlignment(Qt.AlignmentFlag.AlignRight|Qt.AlignmentFlag.AlignVCenter)
+            row.addWidget(value,1); box.addLayout(row)
             bar = QProgressBar(); bar.setRange(0,1000); bar.setTextVisible(False); bar.setFixedHeight(6); box.addWidget(bar)
             gauges.addWidget(card,i//3,i%3); self.gauges[key]=(value,bar)
         layout.addLayout(gauges)
@@ -622,16 +937,8 @@ workspace.windowList().forEach(w => place(w,true));
         self.hud = StateButton('FPS 浮層',[(False,'浮層關閉','eye-off'),(True,'浮層開啟','activity')],self.set_hud)
         self.hud.show_value(self.prefs['hud']); bottom.addWidget(self.hud); layout.addLayout(bottom)
 
-    def make_modes(self):
-        layout = self.page('模式')
-        for name, title, description in [('quiet','安靜','省電 CPU／GPU，較晚的風扇升速'),('standard','標準','依負載調節 CPU／GPU，平衡風扇'),('performance','高效能','最大 CPU／GPU 時脈，積極散熱')]:
-            layout.addWidget(self.button(title + ' · ' + description, lambda checked=False, mode=name: self.set('performance', [mode])))
-        layout.addWidget(self.button('智慧模式', lambda: self.set('smart', ['on'])))
-        layout.addWidget(self.button('啟動遊戲…', self.choose_game))
-        info = QLabel('FPS 限制與浮層適用於 MangoHud 包裝的 OpenGL／Vulkan 遊戲。\n命令列：aynthor-control --run 遊戲程式 [參數]\n執行中設定會由 MangoHud 自動重新載入。'); info.setWordWrap(True); info.setObjectName('Notice'); layout.addWidget(info)
-        layout.addStretch()
-
     def make_tasks(self):
+        self.tasks_index = self.tabs.count()
         layout = self.page('工作')
         self.task_page = 0; self.task_records = []; self.selected_task = None
         self.task_buttons = []
@@ -639,49 +946,84 @@ workspace.windowList().forEach(w => place(w,true));
         for i in range(6):
             button = TaskButton('—'); button.clicked.connect(lambda checked=False,index=i:self.select_task(index))
             button.held.connect(lambda index=i:self.task_menu(index))
-            button.setMinimumHeight(62); button.setIconSize(QSize(28,28)); grid.addWidget(button,i//2,i%2); self.task_buttons.append(button)
+            button.setMinimumHeight(62); button.setIconSize(QSize(ICON_SIZE,ICON_SIZE)); grid.addWidget(button,i//2,i%2); self.task_buttons.append(button)
         row = QHBoxLayout()
         row.addWidget(self.button('上一頁',lambda:self.change_task_page(-1)))
         self.task_count = QLabel('0 / 0'); self.task_count.setAlignment(Qt.AlignmentFlag.AlignCenter); row.addWidget(self.task_count,1)
         row.addWidget(self.button('下一頁',lambda:self.change_task_page(1))); layout.addLayout(row)
         row = QHBoxLayout(); row.addWidget(self.button('重新整理',self.refresh_tasks));  layout.addLayout(row)
         layout.addStretch()
-        self.tabs.currentChanged.connect(lambda i:self.refresh_tasks() if i==2 else None)
+        self.tabs.currentChanged.connect(lambda i:self.refresh_tasks() if i==self.tasks_index else None)
 
     def make_screen(self):
         layout = self.page('屏幕控制'); self.screen_sliders = {}
-        card = QWidget(); card.setObjectName('Gauge'); form = QFormLayout(card)
-        for key, title in [('both','雙屏亮度'),('top','主螢幕亮度'),('bottom','副螢幕亮度')]:
-            row = QHBoxLayout(); icon = QLabel(); icon.setPixmap(control_icon('sun').pixmap(22,22)); row.addWidget(icon)
-            slider = TouchSlider(Qt.Orientation.Horizontal); slider.setRange(1,100); row.addWidget(slider,1)
-            value = QLabel('—%'); value.setFixedWidth(48); row.addWidget(value)
+        row=QHBoxLayout(); self.screen_display_buttons={}
+        for name,title in [('DSI-2','上屏顯示'),('DSI-1','下屏顯示')]:
+            button=StateButton(title,[(True,title,'monitor'),(False,title.replace('顯示','遮黑'),'eye-off')],lambda value,n=name:self.set_screen_display(n,value))
+            button.show_value(True); self.screen_display_buttons[name]=button; row.addWidget(button,1)
+        layout.addLayout(row)
+        card = QWidget(); card.setObjectName('Gauge'); box = QVBoxLayout(card)
+        for key,title in [('both','雙屏'),('top','主屏'),('bottom','副屏')]:
+            row=QHBoxLayout(); icon=QLabel(); icon.setPixmap(control_icon('sun').pixmap(ICON_SIZE,ICON_SIZE)); row.addWidget(icon)
+            label=QLabel(title); label.setFixedWidth(46); row.addWidget(label)
+            slider=TouchSlider(Qt.Orientation.Horizontal); slider.setRange(1,100); row.addWidget(slider,1)
+            value=QLabel('—%'); value.setFixedWidth(46); row.addWidget(value)
             slider.valueChanged.connect(lambda n,l=value:l.setText(f'{n}%'))
             slider.edited.connect(lambda n,k=key:self.screen_brightness(k,n))
-            form.addRow(QLabel(title),row); self.screen_sliders[key]=slider
+            box.addLayout(row); self.screen_sliders[key]=slider
         layout.addWidget(card)
-        card = QWidget(); card.setObjectName('Gauge'); form = QFormLayout(card)
-        self.volume = TouchSlider(Qt.Orientation.Horizontal); self.volume.setRange(0,100)
+        card=QWidget(); card.setObjectName('Gauge'); row=QHBoxLayout(card)
+        self.audio_muted=False
+        self.volume_icon=self.button('',self.toggle_audio_mute); self.volume_icon.setIconSize(QSize(ICON_SIZE,ICON_SIZE)); self.volume_icon.setFixedWidth(44)
+        self.volume_icon.setAccessibleName(tr('音量')); row.addWidget(self.volume_icon)
+        self.volume=TouchSlider(Qt.Orientation.Horizontal); self.volume.setRange(0,100); row.addWidget(self.volume,1)
+        self.volume_label=QLabel('—%'); self.volume_label.setFixedWidth(46); row.addWidget(self.volume_label)
         self.volume.edited.connect(lambda n:self.set_audio('set-volume',f'{n}%'))
-        row = QHBoxLayout(); row.addWidget(self.volume,1); self.volume_label = QLabel('—%'); row.addWidget(self.volume_label)
-        self.volume.valueChanged.connect(lambda n:self.volume_label.setText(f'{n}%'))
-        form.addRow(QLabel('音量'),row)
-        self.mute = self.button('靜音',lambda:self.set_audio('set-mute','1' if self.mute.isChecked() else '0'),True)
-        self.mute.setIcon(control_icon('volume-x')); form.addRow(self.mute); layout.addWidget(card)
-        move = self.button('移動目前應用到另一螢幕',lambda:self.action('swap')); move.setIcon(control_icon('arrow-left-right')); layout.addWidget(move)
-        form = QFormLayout(); layout.addLayout(form)
-        self.launch_screen = Choice()
-        for title,name in [('跟隨桌面',''),('上屏','DSI-2'),('下屏','DSI-1')]: self.launch_screen.addItem(title,name)
-        self.launch_screen.setCurrentIndex(self.launch_screen.findData(self.prefs.get('launch_screen','')))
-        self.launch_screen.activated.connect(lambda i:self.set_launch_screen(self.launch_screen.currentData()))
-        form.addRow(QLabel('新應用預設屏幕'),self.launch_screen)
-        self.screenshot_mode = StateButton('截圖模式',self.screenshot_choices(),self.set_screenshot_mode)
-        self.screenshot_mode.show_value(self.prefs.get('screenshot_mode','top')); form.addRow(QLabel('截圖模式'),self.screenshot_mode)
-        label = QLabel('工作頁顯示應用所在屏幕；長按可移動並記住啟動屏幕。'); label.setWordWrap(True); layout.addWidget(label)
-        label = QLabel('音量控制共用揚聲器，與上下屏無關。'); label.setWordWrap(True); layout.addWidget(label)
+        self.volume.valueChanged.connect(lambda n:self.update_volume_icon()); layout.addWidget(card)
+        row=QHBoxLayout()
+        move=self.button('移動目前應用',lambda:self.action('swap')); move.setIcon(control_icon('arrow-left-right')); row.addWidget(move,1)
+        self.launch_screen=StateButton('新應用預設屏幕',[('','跟隨桌面','panels-top-left'),('DSI-2','新應用：上屏','monitor'),('DSI-1','新應用：下屏','monitor')],self.set_launch_screen)
+        self.launch_screen.show_value(self.prefs.get('launch_screen','')); row.addWidget(self.launch_screen,1); layout.addLayout(row)
         layout.addStretch()
+
+    def update_volume_icon(self):
+        value=self.volume.value()
+        icon='volume-x' if self.audio_muted or value == 0 else 'volume' if value < 20 else 'volume-1' if value < 60 else 'volume-2'
+        self.volume_icon.setIcon(control_icon(icon)); self.volume_label.setText(f'{value}%')
+        self.volume_icon.setToolTip(tr('取消靜音' if self.audio_muted else '靜音'))
+
+    def toggle_audio_mute(self):
+        self.audio_muted=not self.audio_muted
+        self.set_audio('set-mute','1' if self.audio_muted else '0'); self.update_volume_icon()
 
     def set_launch_screen(self,name):
         self.set_pref('launch_screen',name); self.install_placement()
+
+    def set_gamepad_focus(self,mode):
+        if mode not in ('auto','top','bottom'): return
+        self.set_pref('gamepad_focus',mode); self.install_placement()
+        QTimer.singleShot(1000,self.focus_gamepad)
+
+    def focus_gamepad(self):
+        if self.prefs.get('gamepad_focus','auto')!='auto':
+            self.session_call('org.kde.kglobalaccel','/component/kwin','org.kde.kglobalaccel.Component','invokeShortcut',['HandheldDash Gamepad Focus'])
+
+    def set_screen_display(self,name,visible):
+        if visible:
+            if name in self.screen_blanks: self.screen_blanks[name].hide()
+            return
+        screen=next((s for s in QApplication.screens() if s.name()==name),None)
+        if not screen:
+            self.screen_display_buttons[name].show_value(True); self.notify('找不到截圖屏幕'); return
+        if name not in self.screen_blanks:
+            blank=QWidget(None,Qt.WindowType.Tool|Qt.WindowType.FramelessWindowHint|Qt.WindowType.WindowStaysOnTopHint|Qt.WindowType.WindowDoesNotAcceptFocus)
+            blank.setWindowTitle('HandheldDash Blank '+name)
+            blank.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+            blank.setFocusPolicy(Qt.FocusPolicy.NoFocus); blank.setStyleSheet('background:black;')
+            self.screen_blanks[name]=blank
+        blank=self.screen_blanks[name]; blank.winId(); blank.windowHandle().setScreen(screen)
+        blank.setGeometry(screen.geometry()); blank.showFullScreen()
+        if name=='DSI-1': self.hide()
 
     def screen_brightness(self,key,value):
         self.set('brightness',[key,str(value)])
@@ -698,9 +1040,9 @@ workspace.windowList().forEach(w => place(w,true));
             if process.exitCode()==0 and len(output)>=2:
                 try:
                     if not self.volume.isSliderDown() and revision == self.audio_revision: self.volume.setValue(round(float(output[1])*100))
-                    if revision == self.audio_revision: self.mute.setChecked('[MUTED]' in output)
+                    if revision == self.audio_revision: self.audio_muted='[MUTED]' in output; self.update_volume_icon()
                 except ValueError: pass
-            self.volume.setEnabled(process.exitCode()==0); self.mute.setEnabled(process.exitCode()==0)
+            self.volume.setEnabled(process.exitCode()==0); self.volume_icon.setEnabled(process.exitCode()==0)
             self.audio_busy=False; process.deleteLater()
         process.finished.connect(done)
         process.errorOccurred.connect(lambda error:done())
@@ -723,21 +1065,40 @@ workspace.windowList().forEach(w => place(w,true));
         process.start('wpctl',[operation,'@DEFAULT_AUDIO_SINK@',value])
 
     def combo(self, form, label, items, operation, key):
-        combo = Choice(); combo.addItems(items)
-        combo.activated.connect(lambda i: self.set(operation, [combo.currentText()]))
-        form.addRow(QLabel(label), combo)
-        self.setting_widgets[key] = combo
-        return combo
+        options=[(value,value,'zap' if value=='performance' else 'leaf' if value=='powersave' else 'sliders-horizontal') for value in items]
+        button=StateButton(label,options,lambda value:self.set(operation,[value]))
+        form.addRow(QLabel(label),button); self.setting_widgets[key]=button
+        return button
+
+    @staticmethod
+    def fan_link_choices():
+        return [(True,'隨效能','fan'),(False,'獨立調節','sliders-horizontal')]
+
+    def set_fan_follow(self,value):
+        self.fan_edit_timer.stop(); self.write_queue.pop('fan-curve',None); self.fan_dirty=False
+        self.fan_graph.dragging=False
+        if value:
+            if self.fan_graph.curve: self.load_fan_curve(self.fan_graph.curve,False)
+        else:
+            curve=self.state.get('fan_control',{}).get('curves',{}).get('custom')
+            if curve: self.load_fan_curve(curve,True)
+        self.set('fan-follow-performance',['on' if value else 'off'])
 
     def make_fan(self):
         layout=self.page('風扇管理'); self.fan_dirty=False; self.fan_loading=False
+        self.fan_performance=QLabel('—'); layout.addWidget(self.fan_performance)
         row=QHBoxLayout()
-        self.fan_profile=StateButton('風扇策略',[('quiet','安靜','leaf'),('moderate','標準','gauge'),('aggressive','強散熱','fan'),('custom','自訂','sliders-horizontal')],self.select_fan_profile)
+        self.fan_profile=QLabel('—')
         self.fan_sensor=StateButton('風扇感測',[('max','最熱感測器','thermometer'),('average','平均感測器','activity')],lambda v:self.set('fan-sensor-mode',[v]))
+        self.fan_follow=StateButton('風扇聯動',self.fan_link_choices(),self.set_fan_follow)
+        row.addWidget(self.fan_follow,1)
         row.addWidget(self.fan_profile,1); row.addWidget(self.fan_sensor,1); layout.addLayout(row)
-        self.fan_graph=FanCurve(); layout.addWidget(self.fan_graph)
+        self.fan_graph=FanCurve(); self.fan_graph.pointChanged.connect(self.edit_fan_point); layout.addWidget(self.fan_graph,1)
         self.fan_reading=QLabel('—'); layout.addWidget(self.fan_reading)
-        scroll=QScrollArea(); scroll.setWidgetResizable(True); scroll.setMinimumHeight(110)
+        self.fan_edit_timer=QTimer(self); self.fan_edit_timer.setSingleShot(True); self.fan_edit_timer.setInterval(120); self.fan_edit_timer.timeout.connect(self.apply_fan_curve)
+        self.fan_dialog=QDialog(self); self.fan_dialog.setWindowTitle(tr('進階數值面板')); dialog_layout=QVBoxLayout(self.fan_dialog)
+        advanced=self.button('進階數值面板',self.fan_dialog.show); layout.addWidget(advanced)
+        scroll=QScrollArea(); scroll.setWidgetResizable(True); scroll.setMinimumHeight(250)
         editor=QWidget(); grid=QGridLayout(editor); grid.setContentsMargins(8,4,8,4)
         self.fan_points=[]
         for i in range(7):
@@ -748,36 +1109,37 @@ workspace.windowList().forEach(w => place(w,true));
             speed.valueChanged.connect(self.edit_fan_curve); temp.valueChanged.connect(self.edit_fan_curve)
             grid.addWidget(temp,i,0); grid.addWidget(speed,i,1); grid.addWidget(value,i,2)
             self.fan_points.append((temp,speed))
-        scroll.setWidget(editor); layout.addWidget(scroll,1)
-        row=QHBoxLayout(); row.addWidget(self.button('複製為自訂',self.copy_fan_curve))
-        self.fan_apply=self.button('套用自訂曲線',self.apply_fan_curve); row.addWidget(self.fan_apply); layout.addLayout(row)
+        scroll.setWidget(editor); dialog_layout.addWidget(scroll); dialog_layout.addWidget(self.button('關閉',self.fan_dialog.close)); self.fan_dialog.resize(510,370)
 
     def load_fan_curve(self,curve,editable=False):
         self.fan_loading=True
+        self.fan_graph.editable=editable
+        if not editable: self.fan_graph.selected=None; self.fan_graph.dragging=False
         self.fan_graph.curve=curve; self.fan_graph.update()
         for i,(temp,speed) in enumerate(self.fan_points):
-            temp.setValue(round(curve['temperatures'][i]/1000)); speed.setValue(round(curve['pwm'][i]/2.55))
+            temp.setRange(20,95); temp.setValue(round(curve['temperatures'][i]/1000)); speed.setValue(round(curve['pwm'][i]/2.55))
             temp.setEnabled(editable); speed.setEnabled(editable and i<6)
-        self.fan_apply.setEnabled(editable)
         self.fan_loading=False
-
-    def select_fan_profile(self,value):
-        self.fan_dirty=False
-        curves=self.state.get('fan_control',{}).get('curves',{})
-        if value in curves: self.load_fan_curve(curves[value],value=='custom')
-        self.set('fan-profile',[value])
-
-    def copy_fan_curve(self):
-        if self.fan_graph.curve:
-            self.load_fan_curve(self.fan_graph.curve,True)
-            self.fan_points[-1][1].setValue(100)
-            self.fan_profile.show_value('custom'); self.edit_fan_curve()
 
     def edit_fan_curve(self,*args):
         if self.fan_loading: return
         self.fan_dirty=True
+        self.fan_loading=True
+        for i,(temp,speed) in enumerate(self.fan_points):
+            low=self.fan_points[i-1][0].value()+1 if i else 20
+            high=self.fan_points[i+1][0].value()-1 if i<6 else 95
+            temp.setRange(low,high)
+            speed.setValue(100 if i==6 else max(self.fan_points[i-1][1].value() if i else 0,min(self.fan_points[i+1][1].value(),speed.value())))
+        self.fan_loading=False
         self.fan_graph.curve={'temperatures':[temp.value()*1000 for temp,speed in self.fan_points],'pwm':[round(speed.value()*2.55) for temp,speed in self.fan_points]}
-        self.fan_graph.update(); self.fan_reading.setText('未套用的曲線')
+        self.fan_graph.update()
+        if not self.fan_edit_timer.isActive(): self.fan_edit_timer.start()
+
+    def edit_fan_point(self,index,temp,percent):
+        self.fan_loading=True
+        temperature,speed=self.fan_points[index]
+        temperature.setValue(temp); speed.setValue(percent)
+        self.fan_loading=False; self.edit_fan_curve()
 
     def apply_fan_curve(self):
         curve=self.fan_graph.curve
@@ -788,13 +1150,16 @@ workspace.windowList().forEach(w => place(w,true));
         self.set('fan-curve',list(map(str,temps+speeds)))
 
     def update_fan(self):
+        performance=self.state.get('performance','standard')
+        self.fan_performance.setText(tr({'quiet':'安靜','standard':'標準','performance':'高效能','custom':'自訂'}.get(performance,performance)))
+        self.fan_follow.show_value(self.state.get('fan_follow_performance',True))
         control=self.state.get('fan_control',{})
         self.fan_graph.temperature=control.get('temperature',0)/1000
         self.fan_graph.update()
-        if self.fan_dirty or self.write_queue: return
+        if self.fan_dirty or self.write_queue or self.fan_graph.dragging: return
         profile=self.state.get('fan_profile','moderate')
         if profile=='auto': profile='moderate'
-        self.fan_profile.show_value(profile); self.fan_sensor.show_value(self.state.get('fan_sensor_mode','max'))
+        self.fan_profile.setText(tr({'quiet':'安靜','moderate':'標準','aggressive':'強散熱','custom':'自訂'}.get(profile,profile))); self.fan_sensor.show_value(self.state.get('fan_sensor_mode','max'))
         curve=control.get('curves',{}).get(profile)
         if curve: self.load_fan_curve(curve,profile=='custom')
         self.fan_reading.setText(f"{self.fan_graph.temperature:.1f} °C · {self.state.get('fan_rpm') or 0:.0f} RPM · PWM {self.state.get('fan_percent') or 0:.0f}%")
@@ -804,6 +1169,7 @@ workspace.windowList().forEach(w => place(w,true));
         return [('off','燈光關閉','lightbulb-off'),('battery','電量燈光','battery'),('static','固定燈光','palette'),('audio','音頻律動','volume-2')]
 
     def make_lighting(self):
+        self.lighting_index = self.tabs.count()
         layout = self.page('燈光管理')
         self.lighting_mode = StateButton('氛圍燈',self.lighting_choices(),self.set_rgb_mode); layout.addWidget(self.lighting_mode)
         form = QFormLayout(); layout.addLayout(form)
@@ -823,10 +1189,8 @@ workspace.windowList().forEach(w => place(w,true));
             pad.colorChosen.connect(lambda color,k=side:self.set_ring_color(k,color))
             pad.detent.connect(lambda:self.call('Feedback',[],quiet=True))
             column.addWidget(pad); self.lighting_pads.append(pad)
-        label = QLabel('點擊預覽或按 L3／R3 開啟色環，轉動對應搖杆逐格選色，再按一次關閉。'); label.setWordWrap(True); layout.addWidget(label)
-        label = QLabel('X：最低／最高亮度；Y：響應靈敏度（S）。音量自動歸一化，保留左右聲道差異。'); label.setWordWrap(True); layout.addWidget(label)
-        label = QLabel('內錄播放音頻；左右聲道分別控制左右搖杆燈。靜音時燈光熄滅。'); label.setWordWrap(True); layout.addWidget(label)
-        self.lighting_status = QLabel('—'); self.lighting_status.setWordWrap(True); layout.addWidget(self.lighting_status)
+        label = QLabel('X：最低／最高亮度；Y：響應靈敏度。'); label.setWordWrap(True); layout.addWidget(label)
+        self.lighting_status = QLabel('—'); self.lighting_status.setWordWrap(True)
         layout.addStretch()
         self.capture = None; self.capture_buffer = b''; self.capture_source = None
         self.monitor_query = False; self.frame_pending = False; self.lighting_levels = [0.,0.]
@@ -846,7 +1210,7 @@ workspace.windowList().forEach(w => place(w,true));
             process.terminate()
             QTimer.singleShot(500,lambda:process.kill() if process.state()!=QProcess.ProcessState.NotRunning else None)
             QTimer.singleShot(700,process.deleteLater)
-        self.lighting_levels = [0.,0.]
+        self.lighting_levels = [0.,0.]; self.lighting_sent_colors = None
         for side,pad in zip(('left','right'),self.lighting_pads): pad.set_output(self.prefs['lighting_'+side],0)
 
     def sync_lighting(self,mode):
@@ -859,7 +1223,8 @@ workspace.windowList().forEach(w => place(w,true));
                 color=QColor.fromRgb(*[round(v*255/peak) if peak else 0 for v in rgb])
                 if not pad.color_open: pad.set_output(color,peak/255)
             self.lighting_status.setText(tr('音頻律動未啟用')); return
-        if self.monitor_query: return
+        if self.monitor_query or time.monotonic()-getattr(self,'monitor_query_time',0) < 10: return
+        self.monitor_query_time = time.monotonic()
         self.monitor_query = True
         query = QProcess(self)
         def done(code=1,*args):
@@ -912,14 +1277,13 @@ workspace.windowList().forEach(w => place(w,true));
                 self.lighting_reference=max(.001,peak,self.lighting_reference*math.exp(-elapsed/5.))
         colors = []
         for channel,side in enumerate(('left','right')):
-            values = samples[channel::2]
             rms = rms_channels[channel]
             pad = self.lighting_pads[channel]
             sensitivity=math.log(pad.sensitivity)/math.log(20)
             threshold=.12-.10*sensitivity
             normalized=max(0.,min(1.,(rms/self.lighting_reference-threshold)/(1-threshold))) if rms > .0008 else 0.
             response=.9*normalized**(1.6-.8*sensitivity)
-            if values:
+            if samples:
                 self.lighting_targets[channel] = pad.minimum+(pad.maximum-pad.minimum)*response if response else 0.
             elif now-self.lighting_last_audio > .2: self.lighting_targets[channel] = 0.
             target = self.lighting_targets[channel]
@@ -932,9 +1296,12 @@ workspace.windowList().forEach(w => place(w,true));
             color = QColor(self.prefs['lighting_'+side])
             scale = level
             colors.extend(round(v*scale) for v in (color.red(),color.green(),color.blue()))
-        if not self.frame_pending:
+        if not self.frame_pending and (colors != getattr(self,'lighting_sent_colors',None) or now-getattr(self,'lighting_sent_time',0) >= 1):
             self.frame_pending = True
-            self.call('LightingFrame',colors,quiet=True,finished=lambda ok,busy:setattr(self,'frame_pending',False))
+            def sent(ok,busy):
+                self.frame_pending = False
+                if ok: self.lighting_sent_colors = colors; self.lighting_sent_time = now
+            self.call('LightingFrame',colors,quiet=True,finished=sent)
 
     def make_settings(self):
         self.settings_index=self.tabs.count()
@@ -943,20 +1310,42 @@ workspace.windowList().forEach(w => place(w,true));
         self.setting_widgets = {}; self.sliders = self.screen_sliders.copy(); self.group_names = []
         def group(title):
             self.group_names.append(title)
-            page = QWidget(); box = QVBoxLayout(page); form = QFormLayout(); box.addLayout(form); box.addStretch()
+            page = QWidget(); box = QVBoxLayout(page); form = QFormLayout(); form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow); form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows); box.addLayout(form); box.addStretch()
             self.settings_stack.addWidget(page)
             return form
+        form = group('TAB 管理')
+        help_text = QLabel('選擇常駐頁面；其他頁面可從此處開啟，離開後自動收起。設定頁始終保留。'); help_text.setWordWrap(True); form.addRow(help_text)
+        list_widget = QWidget(); list_layout = QVBoxLayout(list_widget)
+        for i,title in enumerate(self.page_titles[:-1]):
+            row = QHBoxLayout(); row.addWidget(QLabel(title),1)
+            pin = self.button('常駐',lambda checked,t=title:self.pin_tab(t,checked),True)
+            pin.setChecked(title in self.prefs.get('resident_tabs',self.page_titles))
+            row.addWidget(pin); row.addWidget(self.button('開啟',lambda checked=False,index=i:self.open_tab(index)))
+            list_layout.addLayout(row)
+        scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setWidget(list_widget); form.addRow(scroll)
         form = group('效能')
-        self.combo(form,'CPU governor',['performance','schedutil','ondemand','powersave','auto'],'cpu-governor','cpu_governor')
+        self.mango_mode=StateButton('MangoHud',[('release','配置釋放','sliders-horizontal'),('takeover','配置接管','gauge')],lambda value:self.set_mangohud_mode(value))
+        form.addRow(QLabel('MangoHud'),self.mango_mode)
+        self.panel_affinity = StateButton('中控 CPU', [('system','跟隨系統','sliders-horizontal'),('little','僅小核','leaf')],self.set_cpu_affinity)
+        self.panel_affinity.show_value(self.prefs['panel_cpu_affinity'])
+        self.panel_affinity.setToolTip(tr('僅限制中控應用；外部啟動的應用不受限制。')+' CPU '+','.join(map(str,sorted(self.little_cpus))))
+        form.addRow(QLabel('中控 CPU'),self.panel_affinity)
+        row=QHBoxLayout()
+        cpu=StateButton('CPU governor',[(v,v,'zap' if v=='performance' else 'leaf' if v=='powersave' else 'sliders-horizontal') for v in ['performance','schedutil','ondemand','powersave','auto']],lambda v:self.set('cpu-governor',[v]))
+        self.setting_widgets['cpu_governor']=cpu; row.addWidget(cpu,1)
+        self.boost=StateButton('CPU boost',[(False,'Boost 關閉','sliders-horizontal'),(True,'Boost 開啟','zap')],lambda v:self.set('cpu-boost',['on' if v else 'off'])); row.addWidget(self.boost,1)
+        form.addRow(QLabel('CPU governor'),row)
         self.combo(form,'GPU governor',['performance','simple_ondemand','powersave','userspace','auto'],'gpu-governor','gpu_governor')
         self.combo(form,'排程器',['regular','lavd'],'scheduler','scheduler')
-        self.boost = self.button('CPU boost',lambda:self.set('cpu-boost',['on' if self.boost.isChecked() else 'off']),True); form.addRow(self.boost)
+        self.ufs_irq=StateButton('UFS 中斷位置',[('system','恢復原配置','sliders-horizontal'),('powersave','省電 CPU0–2','leaf'),('performance','高性能 CPU7','zap')],lambda value:self.set('ufs-irq',[value]))
+        self.ufs_irq.setToolTip(tr('CPU7 可能增加功耗，實際性能取決於負載。'))
+        form.addRow(QLabel('UFS 中斷位置'),self.ufs_irq)
         self.sliders['rgb'] = self.lighting_brightness
         form = group('按鍵')
-        for key,label in [('back','返回鍵'),('home','首頁鍵')]:
+        for key,label in [('back','返回鍵'),('home','首頁鍵'),('back-home','返回鍵 + 首頁鍵')]:
             combo = Choice()
             for value,text in ACTIONS.items(): combo.addItem(text,value)
-            combo.setCurrentIndex(combo.findData(self.prefs[key])); combo.activated.connect(lambda i,k=key,c=combo:self.set_pref(k,c.currentData())); form.addRow(QLabel(label),combo)
+            combo.setCurrentIndex(combo.findData(self.prefs[key])); combo.activated.connect(lambda i,k=key,c=combo:self.set_button_action(k,c.currentData())); form.addRow(QLabel(label),combo)
             command = QLineEdit(self.prefs[key+'_command']); command.setPlaceholderText('自訂指令，例如 konsole')
             command.editingFinished.connect(lambda k=key,c=command:self.set_pref(k+'_command',c.text())); form.addRow(QLabel(label+'指令'),command)
         form = group('Android')
@@ -964,14 +1353,22 @@ workspace.windowList().forEach(w => place(w,true));
         self.android_parts = []
         self.android_combo = Choice(); self.android_combo.currentIndexChanged.connect(self.describe_android); form.addRow(QLabel('分區'),self.android_combo)
         self.android_label = QLabel('按查詢讀取 Android 分區'); self.android_label.setWordWrap(True); form.addRow(self.android_label)
-        row = QHBoxLayout(); row.addWidget(self.button('查詢',self.refresh_android)); row.addWidget(self.button('唯讀掛載',lambda:self.android_action('mount-android'))); row.addWidget(self.button('卸載',lambda:self.android_action('unmount-android'))); form.addRow(row)
-        form.addRow(self.button('開啟 Android 目錄',lambda:self.start('xdg-open','/mnt/aynthor-android')))
+        row = QHBoxLayout(); row.addWidget(self.button('查詢',self.refresh_android)); self.android_mount=self.button('唯讀掛載',lambda:self.android_action('mount-android')); row.addWidget(self.android_mount); row.addWidget(self.button('卸載',lambda:self.android_action('unmount-android'))); form.addRow(row)
+        form.addRow(self.button('開啟 Android 目錄',self.open_android))
+        self.android_timer=QTimer(self); self.android_timer.setInterval(2000); self.android_timer.timeout.connect(lambda:self.refresh_android() if self.isVisible() else None); self.android_timer.start()
         form = group('語言')
         language = Choice()
         for text,value in [('跟隨系統','system'),('English','en'),('简体中文','zh_CN'),('繁體中文','zh_TW')]: language.addItem(text,value)
         language.setCurrentIndex(language.findData(self.prefs['language']))
         language.activated.connect(lambda i:self.change_language(language.currentData()))
         form.addRow(QLabel('語言'),language)
+        form = group('關於')
+        form.addRow(QLabel('HandheldDash'))
+        form.addRow(QLabel('版本'),QLabel(VERSION))
+        source=QLabel('<a style="color:#bca6ff" href="https://github.com/lurenjiamax/HandheldDash">github.com/lurenjiamax/HandheldDash</a>')
+        source.setOpenExternalLinks(True); source.setWordWrap(True); form.addRow(QLabel('原始碼'),source)
+        for text in ['目前僅支援並測試過 AYN Thor（Thorch BSP）；未來將擴展其他掌機。','原創程式碼：LGPL-3.0-or-later。第三方元件保留各自授權；Lucide 圖示採 ISC，PyQt6 採 GPL／商業授權。','© 2026 lurenjiamax。本程式按現狀提供，不附任何擔保。']:
+            label=QLabel(text); label.setWordWrap(True); form.addRow(label)
         row = QHBoxLayout(); row.addWidget(self.button('上一組',lambda:self.change_group(-1)))
         self.group_title = QLabel(); self.group_title.setAlignment(Qt.AlignmentFlag.AlignCenter); row.addWidget(self.group_title,1)
         row.addWidget(self.button('下一組',lambda:self.change_group(1))); layout.addLayout(row); self.change_group(0)
@@ -981,7 +1378,7 @@ workspace.windowList().forEach(w => place(w,true));
         self.translate_dialogs()
         for widget in self.findChildren(QWidget):
             if hasattr(widget,'retranslate'): widget.retranslate()
-        for i,title in enumerate(['中控','模式','工作','屏幕控制','風扇管理','燈光管理','設定']): self.tabs.setTabText(i,tr(title))
+        for i,title in enumerate(self.page_titles): self.tabs.setTabText(i,tr(title))
         self.setWindowTitle(tr('AYN Thor 中控台'))
 
     def translate_dialogs(self):
@@ -994,7 +1391,7 @@ workspace.windowList().forEach(w => place(w,true));
         self.group_title.setText(f'{self.group_names[index]} · {index+1} / {self.settings_stack.count()}')
 
     def call(self, method, args, callback=None, quiet=False, finished=None):
-        if method not in ('Status','LightingFrame','Feedback'): self.error_text = None
+        if method not in ('Status','LightingFrame','Feedback','Pointer'): self.error_text = None
         watcher = QDBusPendingCallWatcher(self.hardware.asyncCall(method,*args),self)
         self.pending.add(watcher)
         def done(w):
@@ -1024,7 +1421,7 @@ workspace.windowList().forEach(w => place(w,true));
                 other = 'bottom' if values[0] == 'top' else 'top'
                 self.write_queue[('brightness',other)] = ('brightness',[other,both[1]])
         self.write_queue[key]=(operation,values); self.write_revision += 1
-        self.notify('正在套用…'); self.write_timer.start(60)
+        self.write_timer.start(60)
 
     def flush_writes(self):
         if self.write_active is not None or not self.write_queue: return
@@ -1032,7 +1429,7 @@ workspace.windowList().forEach(w => place(w,true));
         self.write_active = (key,operation,values)
         def completed(success,busy):
             self.write_active = None
-            if success and operation == 'fan-curve':
+            if success and operation == 'fan-curve' and self.fan_graph.curve and values == list(map(str,self.fan_graph.curve['temperatures']+self.fan_graph.curve['pwm'])):
                 self.fan_dirty=False; self.update_fan()
             if busy and key not in self.write_queue: self.write_queue[key]=(operation,values)
             self.write_revision += 1
@@ -1044,15 +1441,18 @@ workspace.windowList().forEach(w => place(w,true));
     def update_state(self, raw):
         self.state = json.loads(raw)
         if not self.write_queue:
-            self.smart.show_value(bool(self.state.get('smart')))
+            self.prefs['mangohud_mode']=self.state.get('mangohud_mode','release')
+            self.mango_mode.show_value(self.prefs['mangohud_mode'])
+            controlled=self.prefs['mangohud_mode']=='takeover'
+            self.fps_mode.setEnabled(controlled); self.hud.setEnabled(controlled)
+            self.fan_link_control.show_value(self.state.get('fan_follow_performance',True))
+            self.ufs_irq.show_value(self.state.get('ufs_irq_mode','system'))
             self.vibration.show_value(bool(self.state.get('vibration')))
             self.performance.show_value(self.state.get('performance','standard'))
             self.input_mode.show_value(self.state.get('joystick','gamepad'))
             mode = self.state.get('lighting_mode') or self.state.get('rgb_mode','off')
             self.rgb.show_value(mode); self.lighting_mode.show_value(mode)
             self.sync_lighting(mode)
-        self.joystick.setEnabled(False)
-        self.joystick.setToolTip(tr('手柄布局')+' · '+self.state.get('layout_reason',''))
         b = self.state.get('battery',{})
         self.battery_text.setText('—%' if b.get('capacity') is None else f"{b['capacity']:.0f}%")
         self.battery_icon.reading((b.get('capacity') or 0)/100,charging=b.get('status') == 'Charging')
@@ -1062,16 +1462,20 @@ workspace.windowList().forEach(w => place(w,true));
             self.metric_icons[key].reading(fraction,rpm=self.state.get('fan_rpm') if key == 'fan' else 0,charging=b.get('status') == 'Charging')
         gauge('cpu',f"CPU {fmt(self.state.get('cpu_mhz'))} MHz",(self.state.get('cpu_mhz') or 0)/(self.state.get('cpu_max_mhz') or 3200))
         gauge('gpu',f"GPU {fmt(self.state.get('gpu_mhz'))} MHz",(self.state.get('gpu_mhz') or 0)/(self.state.get('gpu_max_mhz') or 680))
-        gauge('temp',f"{fmt(b.get('temp'),1)} °C",(b.get('temp') or 0)/80)
+        self.update_temperature()
         gauge('fan',f"{fmt(self.state.get('fan_rpm'))} RPM",(self.state.get('fan_percent') or 0)/100)
         gauge('ram',f"{fmt(self.state.get('ram_used_gb'),1)} / {fmt(self.state.get('ram_total_gb'),0)} GB",(self.state.get('ram_used_gb') or 0)/(self.state.get('ram_total_gb') or 1))
-        gauge('battery',f"{fmt(b.get('capacity'))}% · {fmt(b.get('watts'),1)} W",(b.get('capacity') or 0)/100)
-        self.gauges['temp'][0].setToolTip('電池溫度')
+        charging=b.get('status') == 'Charging'
+        self.power_temperature.setText(f"{fmt(b.get('temp'),1)} °C")
+        suffix = ' · '+tr('快充') if charging and b.get('fast_charging') else ''
+        gauge('battery',f"{fmt(b.get('watts'),1)} W{suffix}",(b.get('watts') or 0)/30)
+        self.gauges['battery'][0].setToolTip(tr('充電功率' if charging else '功率消耗'))
         self.gauges['fan'][0].setToolTip(f"PWM {fmt(self.state.get('fan_percent'))}% · {self.state.get('fan_rpm_source')}")
         self.update_fan()
-        self.boost.setChecked(bool(self.state.get('cpu_boost_enabled')))
+        irqs=self.state.get('ufs_irqs',[]); self.ufs_irq.setEnabled(bool(irqs))
+        self.boost.show_value(bool(self.state.get('cpu_boost_enabled')))
         for key,widget in self.setting_widgets.items():
-            if not self.write_queue and not widget.hasFocus(): widget.setCurrentText(str(self.state.get(key,'')))
+            if not self.write_queue and not widget.hasFocus(): widget.show_value(str(self.state.get(key,'')))
         for key,slider in self.sliders.items():
             if slider.isSliderDown() or self.write_queue: continue
             if key == 'both':
@@ -1081,19 +1485,33 @@ workspace.windowList().forEach(w => place(w,true));
                 item = self.state.get('backlight',{}).get(key,{})
                 value = 100 * (item.get('value') or 0) / (item.get('max') or 1)
             slider.setValue(round(value))
-        self.notify(self.error_text or ('服務已連線 · AYN 鍵切換中控' if self.state.get('input_ready') else '服務已連線 · 手柄服務尚未就緒'))
+        self.notify(self.error_text or '')
+
+    def select_temperature(self,sensor):
+        self.set_pref('temperature_sensor',sensor); self.update_temperature()
+
+    def update_temperature(self):
+        sensors=self.state.get('temperature_sensors',[])
+        self.temperature_button.options=[(s['id'],s['name']+' · '+(f"{s['temperature']:.1f} °C" if s['temperature'] is not None else '— °C'),'thermometer') for s in sensors]
+        selected=self.prefs.get('temperature_sensor','battery')
+        self.temperature_button.show_value(selected)
+        value=next((s['temperature'] for s in sensors if s['id']==selected),None)
+        self.gauges['temp'][1].setValue(round(max(0,min(1,(value or 0)/80))*1000))
 
     def refresh(self):
+        now = time.monotonic()
+        if not self.isVisible() and now-getattr(self,'background_refresh_time',0) < 10: return
+        self.background_refresh_time = now
         self.clock.setText(time.strftime('%H:%M'))
-        self.refresh_audio()
-        if self.isVisible() and self.tabs.currentIndex() == 2: self.refresh_tasks()
+        if self.isVisible(): self.refresh_audio()
+        if self.isVisible() and self.tabs.currentIndex() == self.tasks_index: self.refresh_tasks()
         if not self.status_busy and self.write_active is None and not self.write_queue:
             self.status_busy = True
             revision = self.write_revision
             self.call('Status',[],lambda raw:self.update_state(raw) if revision == self.write_revision else None,True)
-        files = list((DATA/'fps').glob('*.csv')) if (DATA/'fps').exists() else []
+        files = [p for folder in (DATA/'fps',Path('/var/cache/handhelddash/fps')) if folder.is_dir() for p in folder.glob('*.csv')]
         files = [p for p in files if not p.name.endswith('_summary.csv') and time.time()-p.stat().st_mtime < 4]
-        self.fps.setText('— FPS')
+        self.fps.setText('— FPS'); self.fps_source.setText('')
         if files:
             latest = max(files,key=lambda p:p.stat().st_mtime)
             try:
@@ -1106,16 +1524,46 @@ workspace.windowList().forEach(w => place(w,true));
                         self.fps.setText(f'{float(columns[0]):.0f} FPS')
                         self.fps_source.setText(latest.name.split('_')[0]); break
             except (OSError,ValueError,IndexError): pass
-        else: self.fps_source.setText('等待遊戲')
+
+    def set_cpu_affinity(self,mode,persist=True):
+        if mode not in ('system','little'): return
+        target = self.little_cpus if mode == 'little' else self.system_cpus
+        previous = {}
+        try:
+            for task in sorted(Path('/proc/self/task').iterdir(),key=lambda p:int(p.name) != os.getpid()):
+                tid = int(task.name)
+                try:
+                    previous[tid] = os.sched_getaffinity(tid)
+                    os.sched_setaffinity(tid,target)
+                except ProcessLookupError: continue
+        except OSError as error:
+            for tid,cpus in previous.items():
+                try: os.sched_setaffinity(tid,cpus)
+                except ProcessLookupError: pass
+            self.panel_affinity.show_value(self.prefs['panel_cpu_affinity']); self.notify(str(error)); return
+        if persist: self.set_pref('panel_cpu_affinity',mode)
+        self.panel_affinity.show_value(mode)
 
     def set_pref(self, key, value):
         self.prefs[key] = value; save(self.prefs)
 
+    def update_mangohud(self):
+        if self.prefs['mangohud_mode'] == 'takeover': mango_config(self.prefs)
+        self.set('mangohud',[self.prefs['mangohud_mode'],self.prefs['fps_limit'],'on' if self.prefs['hud'] else 'off'])
+
+    def set_mangohud_mode(self,value):
+        self.set_pref('mangohud_mode',value)
+        self.update_mangohud()
+
+    def set_button_action(self,key,value):
+        self.set_pref(key,value)
+        if key == 'back-home': self.set('navigation-chord',[value])
+
     def set_fps_limit(self,value):
-        self.set_pref('fps_limit',value); mango_config(self.prefs)
+        self.set_pref('fps_limit',value); self.update_mangohud()
 
     def set_hud(self,value):
-        self.set_pref('hud',value); mango_config(self.prefs)
+        self.set_pref('hud',value); self.update_mangohud()
 
     def set_autolock(self,value):
         self.set_pref('autolock',value)
@@ -1136,7 +1584,7 @@ workspace.windowList().forEach(w => place(w,true));
         def finished(code,status):
             if code: self.notify(process.readAllStandardError().data().decode(errors='replace') or f'{args[0]} 結束碼 {code}')
             self.processes.discard(process); process.deleteLater()
-        process.finished.connect(finished); process.start(args[0],list(args[1:]))
+        process.finished.connect(finished); process.start('taskset',['--cpu-list',','.join(map(str,sorted(self.system_cpus))),*args])
 
     def session_call(self,service,path,interface,method,args):
         msg = QDBusMessage.createMethodCall(service,path,interface,method); msg.setArguments(args)
@@ -1149,8 +1597,11 @@ workspace.windowList().forEach(w => place(w,true));
 
     def action(self, action):
         if action == 'none': return
+        if action == 'reset-touchscreen': self.set('reset-touchscreen',[]); return
+        if action == 'escape' and self.touchpad.isVisible():
+            self.exit_touchpad(); return
         if action in ('lighting-left','lighting-right'):
-            if self.isVisible() and self.tabs.currentIndex() == 5: self.lighting_pads[0 if action=='lighting-left' else 1].toggle_color()
+            if self.isVisible() and self.tabs.currentIndex() == self.lighting_index: self.lighting_pads[0 if action=='lighting-left' else 1].toggle_color()
             return
         if action == 'panel': self.Toggle(); return
         if action == 'screenshot': self.screenshot(); return
@@ -1170,7 +1621,7 @@ workspace.windowList().forEach(w => place(w,true));
     def set_screenshot_mode(self,value):
         if value not in ('region','top','bottom'): return
         self.set_pref('screenshot_mode',value)
-        self.shot.show_value(value); self.screenshot_mode.show_value(value)
+        self.shot.show_value(value)
 
     def screenshot(self):
         if getattr(self,'screenshot_process',None): return
@@ -1216,12 +1667,13 @@ workspace.windowList().forEach(w => place(w,true));
 
     @pyqtSlot('uint',str,float,float)
     def on_stick(self,uid,side,x,y):
-        if uid != os.getuid() or not self.isVisible() or self.tabs.currentIndex()!=5: return
+        if uid != os.getuid() or not self.isVisible() or self.tabs.currentIndex()!=self.lighting_index: return
         self.lighting_pads[0 if side=='left' else 1].rotate_stick(x,y)
 
     @pyqtSlot('uint',str)
     def on_button(self, uid, action):
         if uid != os.getuid(): return
+        if action=='gamepad-focus': self.focus_gamepad(); return
         if action in ('lighting-left','lighting-right'): self.action(action); return
         if action == 'panel': self.Toggle(); return
         configured = self.prefs.get(action,'none')
@@ -1232,16 +1684,48 @@ workspace.windowList().forEach(w => place(w,true));
             except ValueError as e: self.notify(str(e))
         else: self.action(configured)
 
+    def configure_panel_focus(self):
+        import configparser
+        file=CONFIG.parent/'kwinrulesrc'
+        rules=configparser.ConfigParser(interpolation=None,strict=False)
+        rules.optionxform=str
+        if file.exists(): rules.read(file,encoding='utf-8')
+        if not rules.has_section('General'): rules.add_section('General')
+        ids=[value for value in rules.get('General','rules',fallback='').split(',') if value]
+        rule='handhelddash-panel'
+        if rule not in ids: ids.append(rule)
+        rules['General']['rules']=','.join(ids)
+        rules['General']['count']=str(len(ids))
+        rules[rule]={'Description':'HandheldDash panel preserves game focus',
+                     'wmclass':'org.aynthor.Control','wmclassmatch':'1',
+                     'title':tr('AYN Thor 中控台'),'titlematch':'1',
+                     'acceptfocus':'false','acceptfocusrule':'2'}
+        file.parent.mkdir(parents=True,exist_ok=True)
+        stage=file.with_suffix('.handhelddash-new')
+        with stage.open('w',encoding='utf-8') as stream: rules.write(stream,space_around_delimiters=False)
+        stage.replace(file)
+        QDBusInterface('org.kde.KWin','/KWin','org.kde.KWin',self.session).call('reconfigure')
+
     @pyqtSlot()
     def Toggle(self):
+        if any(blank.isVisible() for blank in self.screen_blanks.values()):
+            for name,blank in self.screen_blanks.items():
+                blank.hide(); self.screen_display_buttons[name].show_value(True)
+            if self.isVisible(): return
         if self.isVisible(): self.hide()
         else:
-            if self.tabs.currentIndex()==2: self.refresh_tasks()
-            self.place(); self.showFullScreen(); self.raise_(); self.activateWindow()
+            if self.tabs.currentIndex()==self.tasks_index: self.refresh_tasks()
+            self.setWindowTitle(tr('AYN Thor 中控台'))
+            self.setWindowFlag(Qt.WindowType.WindowDoesNotAcceptFocus,True)
+            self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating,True)
+            self.place(); self.showFullScreen(); self.raise_(); self.refresh()
 
     @pyqtSlot()
     def Settings(self):
-        self.tabs.setCurrentIndex(self.settings_index); self.place(); self.showFullScreen(); self.raise_(); self.activateWindow()
+        self.setWindowTitle('AYN Thor Settings')
+        self.setWindowFlag(Qt.WindowType.WindowDoesNotAcceptFocus,False)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating,False)
+        self.tabs.setCurrentIndex(self.settings_index); self.place(); self.showFullScreen(); self.raise_(); self.activateWindow(); self.refresh()
 
     @pyqtSlot(str, result=bool)
     def Snapshot(self,path):
@@ -1258,23 +1742,38 @@ workspace.windowList().forEach(w => place(w,true));
 
     def refresh_android(self):
         def update(raw):
-            self.android_parts=sorted(json.loads(raw),key=lambda p:p['label']!='userdata'); self.android_combo.clear()
+            selected=self.android_combo.currentData(); self.android_parts=sorted(json.loads(raw),key=lambda p:p['label']!='userdata'); self.android_combo.blockSignals(True); self.android_combo.clear()
             for p in self.android_parts: self.android_combo.addItem(p['label'],p['label'])
-            self.describe_android(0)
+            index=max(0,self.android_combo.findData(selected)); self.android_combo.setCurrentIndex(index); self.android_combo.blockSignals(False); self.describe_android(index)
         self.call('AndroidPartitions',[],update)
 
     def describe_android(self,index):
         if not self.android_parts: self.android_label.setText('未找到 Android 分區'); return
+        if not 0 <= index < len(self.android_parts): return
         p=self.android_parts[index]
-        if p['label'] == 'userdata' and not p['mountable']:
-            self.android_label.setText('/sdcard → /data/media/0\n'+tr('Android 使用硬體封裝加密；Linux 尚未支援解鎖。'))
+        self.android_mount.setText(tr('讀寫掛載' if p['label'] == 'userdata' else '唯讀掛載'))
+        self.android_mount.setEnabled(p['mountable'] and not p.get('busy') and not p.get('mounted'))
+        if p['label'] == 'userdata':
+            state = tr('已掛載' if p.get('mounted') else '尚未掛載')
+            backend = tr('解鎖後端已就緒' if p.get('backend_ready') else '需要匹配核心、原始金鑰與解鎖後端')
+            self.android_label.setText('/sdcard → /mnt/android-data/media/0\n'+state+' · '+p.get('service_state','')+'\n'+backend+('\n'+p['error'] if p.get('error') else ''))
             return
         self.android_label.setText(f"{index+1} / {len(self.android_parts)} · {p.get('filesystem') or 'super 邏輯分區'}\n"+(p['reason'] or '可唯讀掛載'))
 
     def android_action(self,operation):
         label = self.android_combo.currentData()
-        if label: self.set(operation,[label])
+        if label:
+            if label == 'userdata': operation='mount-userdata' if operation == 'mount-android' else 'unmount-userdata'
+            self.set(operation,[label])
         else: self.refresh_android()
+
+    def open_android(self):
+        if self.android_combo.currentData() == 'userdata':
+            part=next((p for p in self.android_parts if p['label'] == 'userdata'),{})
+            if not part.get('mounted'): self.notify(tr('尚未掛載')); return
+            self.call('Set',['userdata-share',['userdata']],lambda _:self.start('xdg-open','/mnt/aynthor-android/userdata'))
+        else:
+            self.start('xdg-open','/mnt/aynthor-android/'+str(self.android_combo.currentData() or ''))
 
     def refresh_tasks(self):
         script = CONFIG/'tasks.js'
@@ -1293,8 +1792,10 @@ callDBus('org.aynthor.Control','/Control','org.aynthor.Control','WindowList',JSO
             for record in records:
                 if record['pid'] == os.getpid(): continue
                 path=Path('/proc')/str(record['pid'])
-                if path.stat().st_uid != os.getuid(): continue
-                record['starttime']=(path/'stat').read_text().rsplit(')',1)[1].split()[19]
+                try:
+                    record['starttime']=(path/'stat').read_text(encoding='utf-8',errors='replace').rsplit(')',1)[1].split()[19]
+                except (OSError,ValueError,IndexError):
+                    continue
                 self.task_records.append(record)
             self.change_task_page(0)
         except (OSError,ValueError,KeyError,IndexError) as e: self.notify(str(e))
@@ -1318,10 +1819,10 @@ callDBus('org.aynthor.Control','/Control','org.aynthor.Control','WindowList',JSO
             if file.is_file():
                 parser = configparser.ConfigParser(interpolation=None, strict=False)
                 try:
-                    parser.read(file)
+                    parser.read(file,encoding='utf-8')
                     name = parser.get('Desktop Entry','Icon',fallback='application-x-executable')
                     return QIcon(name) if name.startswith('/') else QIcon.fromTheme(name,control_icon('monitor'))
-                except configparser.Error:
+                except (configparser.Error,UnicodeError,OSError):
                     pass
         return QIcon.fromTheme(desktop,control_icon('monitor'))
 
@@ -1363,24 +1864,16 @@ callDBus('org.aynthor.Control','/Control','org.aynthor.Control','WindowList',JSO
         QTimer.singleShot(150,lambda:self.start('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.loadScript',str(script),'aynthor-activate'))
         QTimer.singleShot(300,lambda:self.start('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.start'))
 
-    def choose_game(self):
-        command,ok = QInputDialog.getText(self,tr('啟動遊戲'),tr('程式與參數'),text=self.prefs.get('game_command',''))
-        if ok:
-            try:
-                args=shlex.split(command)
-                if args:
-                    self.set_pref('game_command',command)
-                    self.start('/usr/bin/aynthor-control','--run',*args)
-            except ValueError as e:self.notify(str(e))
 
 
 def main():
     if '--run' in sys.argv:
         args = sys.argv[sys.argv.index('--run')+1:]
         if not args: raise SystemExit('Usage: aynthor-control --run PROGRAM [ARGS]')
-        env = os.environ.copy(); env['MANGOHUD_CONFIGFILE'] = str(mango_config(preferences()))
+        env = os.environ.copy()
         os.execvpe('mangohud',['mangohud',*args],env)
-    app = QApplication(sys.argv); app.setQuitOnLastWindowClosed(False); app.setDesktopFileName('org.aynthor.Control')
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_CompressHighFrequencyEvents,False)
+    app = QApplication(sys.argv); app.setStyle(ControlStyle('Fusion')); app.setQuitOnLastWindowClosed(False); app.setDesktopFileName('org.aynthor.Control')
     bus = QDBusConnection.sessionBus()
     if bus.interface().isServiceRegistered(APP).value():
         if '--background' in sys.argv: return
