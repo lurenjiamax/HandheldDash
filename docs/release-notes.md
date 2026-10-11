@@ -1,29 +1,38 @@
-HandheldDash 1.1.0 adds a lower-screen touchpad, configurable resident tabs,
-independent custom fan curves, screen placement controls, and expanded hardware
-settings for AYN Thor on Thorch Arch Linux ARM with KDE Plasma/Wayland.
+HandheldDash 1.2.0 introduces a customizable control dashboard for AYN Thor
+running the Thorch BSP on Arch Linux with KDE Plasma/Wayland.
 
-MangoHud configuration takeover now manages FPS sampling, frame limits and the
-overlay for external games using the system configuration. Takeover persists
-across restarts; releasing it restores the original configuration. Games that
-explicitly override MangoHud settings may require their own configuration.
-The frame-limit button uses numeric vector icons. Task switching handles Chinese
-process names and windows owned by other users. Opening the AYN panel preserves
-the game's focus through a KWin window rule; opening Settings allows text input.
+- Two wide cards and ten compact control slots, with centered content and
+  improved wrapping for long English labels. All cards can be moved or removed.
+- Unified editing for control and monitoring cards: tap-select/swap, drag to
+  reorder, and long-press object menus. Pencil enters editing, plus adds cards,
+  and the checkmark saves the draft.
+- Optional system-load, network-speed and disk-IO monitoring, with interface or
+  disk selection and aggregate modes. CPU/GPU cards independently select
+  utilization or current / maximum MHz.
+- Only selected monitoring cards request sampling. GPU utilization uses real
+  MSM DRM engine counters; inactive samplers, fan animations and FPS CSV scans
+  are stopped. Missing measurements are not replaced with fabricated values.
+- Bounded, theme-aware brightness and volume popups that dismiss on outside
+  taps. Screen controls live in the brightness popup; the integrated speaker
+  icon toggles mute. Move-current-app is an independent control card.
+- Native Plasma Mobile status-bar visibility and Docked Mode settings. The
+  lower-screen status bar is resolved by actual DSI-1 geometry, not Qt screen
+  enumeration. Docked Mode is a global Plasma Mobile setting.
+- JSON translation catalogs, refreshed vector icons, KDE application-menu
+  screen actions, and an updated English dashboard screenshot.
+- Signed net battery power: discharge carries a minus sign, charging does not.
+  Fast/slow charging labels describe the connected charging source, not a
+  separately measured adapter-input wattage.
 
-Back + Home is configurable in Buttons and defaults to resetting the lower
-screen's touch driver. The release also includes temperature sensor selection,
-updated power/GPU icons, instant fan curve editing, audio-reactive joystick
-lighting, CPU-affinity controls for the panel, and reduced background polling.
+Install `handhelddash-1.2.0-1-any.pkg.tar.zst` with `pacman -U` on a compatible
+Thorch installation. `SHA256SUMS` and `.SRCINFO` accompany the package. Hardware
+support remains limited to the tested AYN Thor configuration; the architecture-
+independent package does not imply support for other devices.
 
-Install handhelddash-1.1.0-1-any.pkg.tar.zst using pacman -U on a compatible Thorch
-system. SHA256SUMS and .SRCINFO accompany the package. This Python/data package
-is architecture-independent; hardware support is currently tested only on AYN
-Thor. Wider handheld support is planned. See the English and Chinese installation
-and feature documentation for BSP dependencies and service activation.
+FPS controls still require applications to be explicitly launched with MangoHud.
+Android partition/userdata features remain extremely experimental and require
+matching device-private modules, keys and backends that are not bundled.
 
-Android userdata access requires the matching private device backend, kernel and
-keys, which are not bundled. Android partition features remain extremely
-experimental. The separate experimental keyboard build is not included.
-Original code is LGPL-3.0-or-later; third-party components retain their licenses.
-Changes were checked on the device during development; no unit tests or new full
-hardware validation pass were performed for this release.
+The interface was iteratively deployed during development. No unit tests or new
+full hardware validation pass were run for this release. Original code remains
+LGPL-3.0-or-later; Tabler SVGs retain MIT and Lucide assets retain ISC licensing.

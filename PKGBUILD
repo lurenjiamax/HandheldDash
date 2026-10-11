@@ -1,14 +1,14 @@
 # Maintainer: lurenjiamax <1932231507@outlook.com>
 pkgname=handhelddash
-pkgver=1.1.0
+pkgver=1.2.0
 pkgrel=1
 pkgdesc='Touch-friendly handheld dashboard and privileged hardware daemon for AYN Thor'
 arch=('any')
 url='https://github.com/lurenjiamax/HandheldDash'
-license=('LGPL-3.0-or-later' 'ISC')
+license=('LGPL-3.0-or-later' 'ISC' 'MIT')
 depends=('python' 'python-dbus' 'python-gobject' 'python-evdev' 'python-yaml' 'python-pyqt6' 'qt6-wayland' 'qt6-tools' 'spectacle' 'libpulse' 'libnotify' 'wireplumber' 'systemd' 'util-linux' 'plasma-workspace' 'kwin' 'thorch-bsp' 'thorch-kde-defaults' 'thorch-inputplumber')
 makedepends=('git')
-optdepends=('mangohud: FPS sampling, overlay and frame limits' 'bindfs: Android shared storage access for ordinary users')
+optdepends=('kmod: load optional Android userdata kernel modules' 'mangohud: FPS sampling, overlay and frame limits' 'bindfs: Android shared storage access for ordinary users')
 install=handhelddash.install
 _gitref="${HANDHELDDASH_REF:-tag=v${pkgver}}"
 source=("HandheldDash::git+${url}.git#${_gitref}")
@@ -17,11 +17,15 @@ sha256sums=('SKIP') # Git sources are selected by tag, or the exact CI commit.
 package() {
   cd "$srcdir/HandheldDash"
   install -Dm755 src/app.py "$pkgdir/usr/bin/aynthor-control"
+  install -Dm755 src/userdata-mount.sh "$pkgdir/usr/lib/aynthor/userdata-mount"
   install -Dm755 src/daemon.py "$pkgdir/usr/bin/aynthor-hardwared"
   ln -s aynthor-control "$pkgdir/usr/bin/handhelddash"
   ln -s aynthor-hardwared "$pkgdir/usr/bin/handhelddash-daemon"
+  install -Dm755 src/desktop_launch.py "$pkgdir/usr/lib/aynthor/desktop_launch.py"
   install -Dm644 src/localization.py "$pkgdir/usr/lib/aynthor/localization.py"
   install -Dm644 vendor/lpunpack/lpunpack.py "$pkgdir/usr/lib/aynthor/lpunpack.py"
+  install -Dm644 packaging/translations.json "$pkgdir/usr/share/aynthor/translations.json"
+  install -Dm644 packaging/icons/sources.json "$pkgdir/usr/share/aynthor/icons/sources.json"
   install -d "$pkgdir/usr/share/aynthor/icons"
   printf '%s\n' "$pkgver" > "$pkgdir/usr/share/aynthor/version"
   install -m644 packaging/icons/*.svg "$pkgdir/usr/share/aynthor/icons/"
@@ -33,6 +37,7 @@ package() {
   for file in packaging/org.aynthor.*.desktop; do install -Dm644 "$file" "$pkgdir/usr/share/applications/${file##*/}"; done
   install -Dm644 packaging/aynthor-control.desktop "$pkgdir/etc/xdg/autostart/aynthor-control.desktop"
   for file in LICENSE COPYING; do install -Dm644 "$file" "$pkgdir/usr/share/licenses/$pkgname/$file"; done
+  install -Dm644 packaging/icons/LICENSE-tabler "$pkgdir/usr/share/licenses/$pkgname/tabler-MIT"
   install -Dm644 packaging/icons/LICENSE-lucide "$pkgdir/usr/share/licenses/$pkgname/lucide-ISC"
   install -Dm644 vendor/lpunpack/LICENSE.md "$pkgdir/usr/share/licenses/$pkgname/lpunpack-LGPL"
   install -Dm644 vendor/lpunpack/README.md "$pkgdir/usr/share/doc/$pkgname/lpunpack-provenance.md"

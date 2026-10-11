@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=HandheldDash
-Name[zh_TW]=AYN Thor 中控台
+Name[zh_TW]=HandheldDash
 Comment=Hardware controls, game dashboard and key settings
 Exec=aynthor-control
 Icon=input-gaming

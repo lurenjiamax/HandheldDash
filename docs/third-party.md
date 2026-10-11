@@ -12,6 +12,11 @@ LGPLv3; see vendor/lpunpack/LICENSE.md and its README for provenance.
 Lucide icons: https://lucide.dev, ISC; see packaging/icons/LICENSE-lucide.
 Icons are supplied as SVGs with the original notice.
 
+Tabler icons: https://github.com/tabler/tabler-icons, MIT; see
+packaging/icons/LICENSE-tabler. The per-icon source manifest is
+packaging/icons/sources.json. The dashboard uses these SVGs alongside remaining
+Lucide assets; neither icon library is relicensed by the application.
+
 PyQt6 is an external runtime dependency under GPLv3 or Riverbank commercial
 licensing. Other system dependencies keep their own licenses. LGPL licensing
 of HandheldDash's original files does not replace dependency requirements or

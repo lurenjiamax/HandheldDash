@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=AYN Thor control background listener
+Name=HandheldDash background listener
 Exec=systemctl --user start aynthor-control.service
 OnlyShowIn=KDE;
 NoDisplay=true

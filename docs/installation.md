@@ -17,7 +17,7 @@ Download the package and SHA256SUMS from the release. In their directory:
 
 ```sh
 sha256sum -c SHA256SUMS
-sudo pacman -U handhelddash-1.0.0-1-any.pkg.tar.zst
+sudo pacman -U handhelddash-1.2.0-1-any.pkg.tar.zst
 sudo systemctl enable --now inputplumber.service aynthor-hardwared.service
 systemctl --user enable --now aynthor-control.service
 handhelddash
@@ -77,3 +77,7 @@ its dial, rotate the stick in Gamepad mode to choose a color, and press again to
 close. Input mode is managed through the daemon by InputPlumber: Mouse maps the
 right stick to pointer motion and the left stick to WASD. Mouse mode's remapped
 axes do not drive the color dial; touch still works.
+
+## Optional Android userdata backend
+
+Android userdata is optional and does not load modules at Dash startup. Mounting invokes `/usr/lib/aynthor/userdata-mount`, which reads the running kernel release, loads installed modules with modprobe, or validates and loads the private transport modules from `/var/lib/aynthor/android/tme-modules/<running-kernel-release>/`. It then loads dm-default-key and quota_v2 before invoking the provisioned KeyMint backend. Missing or incompatible modules fail the mount without preventing Dash from running. Rebuild private modules after kernel upgrades; never rename older modules to match a new release. Device-specific keys and runtime libraries remain separately provisioned under `/var/lib/aynthor/android`.

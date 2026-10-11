@@ -30,7 +30,7 @@
 - Hold HOME and BACK together to recover a stuck bottom touchscreen by rebinding
   its driver. The chord suppresses both individual actions; single presses now
   execute on release. Both keys must be released before another recovery.
-- The dashboard and Fan page share the same Follow performance / Independent
+- The dashboard and Fan page share the same Default / Manual fan-mode
   control. The disabled-auto-lock state is labeled Caffine.
 - FanControl-inspired graph editing: edit a preset as custom, drag seven nodes,
   inspect the selected temperature/PWM value and apply explicitly. Numeric
@@ -40,6 +40,11 @@
 - Bottom-screen virtual multitouch touchpad with KDE acceleration, tap and scroll
   settings. Esc exits touchpad mode, including when the upper app has focus.
 - Optional MangoHud wrapper, FPS display and limit controls.
+- Customizable control/monitoring cards with object-scoped edit menus and
+  optional system load, interface-selected network speed and disk-selected IO.
+  Unselected cards do not request monitoring; CPU/GPU choose % or current / maximum MHz.
+- Theme-aware brightness/volume popups, signed net battery power and native
+  Plasma Mobile status-bar / Docked Mode settings. See [dashboard customization](dashboard-customization.md).
 - Extremely experimental Android partition discovery and read-only mount UI.
 
 Only AYN Thor has been supported and previously used for real-device checks.

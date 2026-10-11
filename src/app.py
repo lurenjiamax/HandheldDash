@@ -14,13 +14,13 @@ import subprocess
 import sys
 import time
 
-from PyQt6.QtCore import QObject, QProcess, QTimer, Qt, QEvent, QSize, QRectF, QPointF, QLocale, QTranslator, QLibraryInfo, QStandardPaths, pyqtClassInfo, pyqtSlot, pyqtSignal
-from PyQt6.QtDBus import QDBus, QDBusAbstractAdaptor, QDBusConnection, QDBusInterface, QDBusPendingCallWatcher, QDBusPendingReply, QDBusMessage, QDBusVariant
-from PyQt6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap, QPolygonF, QImage, QConicalGradient, QBrush
-from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton, QTabWidget, QProgressBar, QSlider, QStackedWidget, QFormLayout, QLineEdit, QColorDialog, QMenu, QStyle, QStyleOptionSlider, QStyleOptionButton, QStylePainter, QScrollArea, QSpinBox, QDialog, QProxyStyle)
+from PyQt6.QtCore import QObject, QMetaType, QProcess, QTimer, Qt, QEvent, QSize, QRectF, QPointF, QLocale, QTranslator, QLibraryInfo, QStandardPaths, QMimeData, pyqtClassInfo, pyqtSlot, pyqtSignal
+from PyQt6.QtDBus import QDBus, QDBusArgument, QDBusAbstractAdaptor, QDBusConnection, QDBusInterface, QDBusPendingCallWatcher, QDBusPendingReply, QDBusMessage, QDBusVariant
+from PyQt6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap, QPolygonF, QImage, QConicalGradient, QBrush, QPalette, QDrag
+from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton, QTabWidget, QTabBar, QProgressBar, QSlider, QStackedWidget, QFormLayout, QLineEdit, QColorDialog, QMenu, QStyle, QStyleOptionSlider, QStyleOptionButton, QStylePainter, QScrollArea, QSpinBox, QDialog, QProxyStyle, QSizePolicy)
 
 sys.path.append('/usr/lib/aynthor')
-from localization import Label as QLabel, Button as QPushButton, set_language, tr
+from localization import Label as QLabel, Button as LocalizedButton, set_language, tr, CATALOG
 
 NAME = 'org.aynthor.Hardware1'
 PATH = '/org/aynthor/Hardware1'
@@ -31,7 +31,76 @@ VERSION = VERSION_FILE.read_text().strip() if VERSION_FILE.is_file() else '1.0.0
 CONFIG = Path(os.environ.get('XDG_CONFIG_HOME', str(Path.home() / '.config'))) / 'aynthor'
 DATA = Path(os.environ.get('XDG_DATA_HOME', str(Path.home() / '.local/share'))) / 'aynthor'
 PREFS = CONFIG / 'settings.json'
-ACTIONS = {'escape': 'Esc', 'desktop': '顯示桌面', 'overview': '工作概覽', 'panel': '中控台', 'screenshot': '截圖', 'swap': '移至另一螢幕', 'none': '停用', 'command': '自訂指令', 'reset-touchscreen':'重置觸控驅動'}
+ACTIONS = {'escape': 'Esc', 'desktop': 'Show desktop', 'overview': 'Overview', 'panel': 'Control panel', 'screenshot': 'Screenshot', 'swap': 'Move to other display', 'none': 'Disabled', 'command': 'Custom command', 'reset-touchscreen':'Reset touchscreen driver'}
+
+# Stable component IDs keep saved layouts independent of UI language.
+DASHBOARD_COMPONENTS = {
+    'controls': [('performance','Performance'),('fan_link','Fan linkage'),('input','Input mode'),('focus','Gamepad focus'),('caffeine','Caffine'),('vibration','Vibration'),('lighting','Lighting'),('bypass','Bypass charging')],
+    'metrics': [('cpu','CPU'),('gpu','GPU'),('temp','Temperature'),('fan','Fan'),('ram','RAM'),('battery','Power')],
+    'actions': [('screenshot','Screenshot'),('overview','Overview'),('hud','FPS overlay')],
+}
+DASHBOARD_SECTIONS = {'controls':'Quick controls','metrics':'Live metrics','actions':'Quick actions'}
+DASHBOARD_TILES = {
+    'performance': ('Performance mode','gauge'), 'fan_link': ('Fan mode','fan'),
+    'input': ('Input mode','gamepad-2'), 'focus': ('Focus','monitor'),
+    'caffeine': ('Caffine','coffee'), 'vibration': ('Vibration','vibrate'),
+    'lighting': ('Lighting','palette'), 'screenshot': ('Screenshot','camera'),
+    'overview': ('Overview','panels-top-left'), 'hud': ('FPS overlay','eye'),
+    'brightness': ('Brightness','sun'), 'volume': ('Volume','volume-2'),
+    'move_app': ('Move current app','arrow-left-right'),
+}
+CORE_TILES = ('performance','fan_link')
+METRIC_TITLES = {'cpu':'CPU','gpu':'GPU','temperature':'Temperature','fan':'Fan','memory':'RAM','battery':'Power','load':'System load','network':'Network speed','disk_io':'Disk IO'}
+METRIC_ICONS = {'cpu':'cpu','gpu':'gpu','temperature':'thermometer','fan':'fan','memory':'memory-stick','battery':'plug-zap','load':'activity','network':'network','disk_io':'disk'}
+DEFAULT_TILES = ['performance','fan_link','input','focus','caffeine','vibration','lighting','screenshot','overview','hud','brightness','volume']
+TILE_MIME = 'application/x-handhelddash-tile'
+
+
+def dashboard_preset(name='default'):
+    tiles = {
+        'gaming': ['performance','fan_link','input','focus','vibration','screenshot','hud','volume'],
+        'monitoring': ['performance','fan_link','caffeine','brightness','volume','screenshot'],
+    }.get(name,DEFAULT_TILES)
+    return {'version':3,'tiles':list(CORE_TILES)+[key for key in tiles if key not in CORE_TILES],'metrics':True}
+
+
+def dashboard_layout(raw):
+    """Validate tile IDs and migrate the original section-based layout."""
+    defaults = dashboard_preset()
+    if not isinstance(raw,dict): return defaults
+    if 'tiles' in raw:
+        if not isinstance(raw['tiles'],list): return defaults
+        tiles = []
+        for key in raw['tiles']:
+            if isinstance(key,str) and key in DASHBOARD_TILES and key not in tiles: tiles.append(key)
+        result={'version':4,'tiles':tiles[:12],'metrics':raw.get('metrics') if isinstance(raw.get('metrics'),bool) else True}
+        for key in ('show_fps','show_cap'): result[key]=raw.get(key,True) is not False
+        result['metric_mode']='percent' if raw.get('metric_mode') == 'percent' else 'mhz'
+        modes=raw.get('metric_modes',{})
+        result['metric_modes']={key:('percent' if isinstance(modes,dict) and modes.get(key,raw.get('metric_mode')) == 'percent' else 'mhz') for key in ('cpu','gpu')}
+        sources=raw.get('metric_sources',{})
+        result['metric_sources']={key:(sources[key][:100] if isinstance(sources,dict) and isinstance(sources.get(key),str) else 'all') for key in ('network','disk_io')}
+        order=raw.get('metric_order',['cpu','gpu','temperature','fan','memory','battery'])
+        result['metric_order']=list(dict.fromkeys(key for key in order if isinstance(key,str) and key in METRIC_TITLES))[:6] if isinstance(order,list) else ['cpu','gpu','temperature','fan','memory','battery']
+        return result
+    if not any(isinstance(raw.get(section),list) for section in ('controls','actions','metrics')): return defaults
+    tiles = []
+    for section in ('controls','actions'):
+        values = raw.get(section)
+        if not isinstance(values,list):
+            tiles.extend(key for key in defaults['tiles'] if key in dict(DASHBOARD_COMPONENTS[section]) and key not in tiles)
+            continue
+        seen = set()
+        for item in values:
+            if not isinstance(item,dict): continue
+            key = item.get('id')
+            if not isinstance(key,str) or key not in dict(DASHBOARD_COMPONENTS[section]) or key in seen: continue
+            seen.add(key)
+            if key in DASHBOARD_TILES and item.get('visible',True) is not False: tiles.append(key)
+        tiles.extend(key for key in defaults['tiles'] if key in dict(DASHBOARD_COMPONENTS[section]) and key not in seen)
+    metrics = raw.get('metrics')
+    visible_metrics = any(isinstance(item,dict) and item.get('visible',True) is not False for item in metrics) if isinstance(metrics,list) else True
+    return {'version':3,'tiles':list(CORE_TILES)+[key for key in tiles if key not in CORE_TILES],'metrics':visible_metrics}
 
 
 def preferences():
@@ -41,6 +110,9 @@ def preferences():
             defaults.update(json.loads(PREFS.read_text()))
         except (ValueError, OSError):
             pass
+    if 'resident_tabs' in defaults:
+        legacy = {value:key for key,values in CATALOG.items() for value in values.values()}
+        defaults['resident_tabs'] = [legacy.get(title,title) for title in defaults['resident_tabs']]
     defaults.pop('mangohud_auto',None)
     return defaults
 
@@ -62,48 +134,90 @@ def mango_config(prefs):
     return file
 
 
+THEME = {}
+
+def theme_color(value):
+    return QColor(THEME.get(value,value))
+
+
 class MetricIcon(QWidget):
     """Draw the measured value; fan motion uses tachometer RPM."""
     def __init__(self, kind):
         super().__init__()
-        self.kind = kind; self.fraction = 0; self.rpm = 0; self.angle = 0; self.charging = False
+        self.kind = kind; self.fraction = 0; self.target_fraction=0; self.rpm = 0; self.angle = 0; self.charging = False; self.fast_charging = False
         self.setObjectName('MetricIcon'); self.setFixedSize(ICON_SIZE,ICON_SIZE)
         self.last_frame = time.monotonic()
         self.timer = QTimer(self); self.timer.timeout.connect(self.animate)
-        if kind == 'fan': self.timer.start(80)
+        if kind == 'fan': self.timer.start(50)
 
     def animate(self):
         now = time.monotonic(); elapsed = now-self.last_frame; self.last_frame = now
-        if self.isVisible() and self.kind == 'fan' and self.rpm:
+        if not self.isVisible() and not (getattr(self,'linked_tile',None) is not None and self.linked_tile.isVisible()): return
+        self.fraction+=(self.target_fraction-self.fraction)*min(1,elapsed*8)
+        if self.kind == 'fan' and self.rpm:
             # Display rotation is scaled for legibility; its speed follows real RPM.
-            self.angle = (self.angle+self.rpm*0.12*elapsed)%360; self.update()
+            self.angle = (self.angle+min(120,self.rpm*.018)*min(elapsed,.1))%360; self.update()
+        if abs(self.target_fraction-self.fraction)>.001 or self.charging: self.update()
 
-    def reading(self, fraction, rpm=0, charging=False):
-        self.fraction = max(0,min(1,fraction or 0)); self.rpm = rpm or 0; self.charging = charging; self.update()
+    def reading(self, fraction, rpm=0, charging=False, fast_charging=False):
+        self.target_fraction = max(0,min(1,fraction or 0)); self.fraction=self.target_fraction; self.rpm = rpm or 0; self.charging = charging; self.fast_charging = fast_charging; self.update()
 
     def paintEvent(self,event):
         p = QPainter(self); p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        name = {'temp':'thermometer','ram':'memory-stick','gpu':'gpu'}.get(self.kind,self.kind)
-        if self.kind == 'battery' and self.charging: name='battery-charging'
+        name = {'temp':'thermometer','ram':'memory-stick','gpu':'gpu','load':'activity','disk_io':'disk'}.get(self.kind,self.kind)
+        if self.kind == 'battery':
+            name = ('battery-fast' if self.fast_charging else 'battery-charging') if self.charging else ('battery-low' if self.fraction <= .2 else 'battery-medium' if self.fraction <= .6 else 'battery-full')
         if self.kind == 'power': name='plug-zap' if self.charging else 'zap'
         if self.kind == 'fan': p.translate(ICON_SIZE/2,ICON_SIZE/2); p.rotate(self.angle); p.translate(-ICON_SIZE/2,-ICON_SIZE/2)
-        control_icon(name).paint(p,0,0,ICON_SIZE,ICON_SIZE)
+        control_icon(name,enabled=self.kind == 'battery' and self.fast_charging).paint(p,0,0,ICON_SIZE,ICON_SIZE)
 
 
 @lru_cache(maxsize=128)
-def control_icon(kind, enabled=False, color='#a68bff'):
+def control_icon(kind, enabled=False, color=None):
     names = {'speed': 'gauge',
              'smart': 'sparkles', 'memory': 'memory-stick', 'gamepad': 'gamepad-2',
-             'rgb': 'palette', 'battery': 'battery-charging'}
+             'rgb': 'palette'}
     name = names.get(kind, kind)
     local = Path(__file__).resolve().parent.parent / 'packaging/icons' / (name + '.svg')
-    return QIcon(str(local if local.exists() else Path('/usr/share/aynthor/icons') / (name + '.svg')))
+    file = local if local.exists() else Path('/usr/share/aynthor/icons') / (name + '.svg')
+    if not file.exists(): return QIcon.fromTheme(name)
+    from PyQt6.QtSvg import QSvgRenderer
+    ink = color or theme_color('#a68bff' if enabled else '#f2efff').name()
+    svg = file.read_text().replace('#e5ddff',theme_color('#f2efff').name()).replace('#c4b5fd',theme_color('#f2efff').name()).replace('currentColor',ink)
+    scale = QApplication.primaryScreen().devicePixelRatio()
+    image = QPixmap(round(ICON_SIZE*scale),round(ICON_SIZE*scale)); image.setDevicePixelRatio(scale); image.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(image); QSvgRenderer(svg.encode()).render(painter,QRectF(0,0,ICON_SIZE,ICON_SIZE)); painter.end()
+    return QIcon(image)
 
 
 class ControlStyle(QProxyStyle):
     def pixelMetric(self,metric,option=None,widget=None):
         if metric == QStyle.PixelMetric.PM_SmallIconSize: return ICON_SIZE
         return super().pixelMetric(metric,option,widget)
+
+
+class QPushButton(LocalizedButton):
+    """Give action/menu icons a short interaction pulse, not perpetual motion."""
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs); self.motion_started=0; self.motion_progress=1
+        self.motion_timer=QTimer(self); self.motion_timer.setInterval(16); self.motion_timer.timeout.connect(self.animate_motion)
+        self.pressed.connect(self.start_motion)
+
+    def start_motion(self):
+        return
+
+    def animate_motion(self):
+        self.motion_progress=min(1,(time.monotonic()-self.motion_started)/.2); self.update()
+        if self.motion_progress>=1: self.motion_timer.stop()
+
+    def paintEvent(self,event):
+        if self.icon().isNull() or self.motion_progress>=1: return super().paintEvent(event)
+        painter=QStylePainter(self); option=QStyleOptionButton(); self.initStyleOption(option)
+        icon=option.icon; option.icon=QIcon(); painter.drawControl(QStyle.ControlElement.CE_PushButton,option)
+        side=self.iconSize().width(); x=(self.width()-side)/2 if not self.text() else 12; y=(self.height()-side)/2
+        scale=1-.14*math.sin(math.pi*self.motion_progress)
+        painter.translate(x+side/2,y+side/2); painter.scale(scale,scale)
+        icon.paint(painter,round(-side/2),round(-side/2),side,side)
 
 
 class TaskButton(QPushButton):
@@ -151,8 +265,8 @@ class TouchSlider(QSlider):
         option=QStyleOptionSlider(); self.initStyleOption(option)
         fraction=(self.value()-self.minimum())/max(1,self.maximum()-self.minimum())
         x=box.right()-fraction*box.width() if option.upsideDown else box.left()+fraction*box.width()
-        color=QColor('#a68bff' if self.isEnabled() else '#666477')
-        p.setPen(Qt.PenStyle.NoPen); p.setBrush(QColor('#303144')); p.drawRoundedRect(box,8,8)
+        color=theme_color('#a68bff' if self.isEnabled() else '#666477')
+        p.setPen(Qt.PenStyle.NoPen); p.setBrush(theme_color('#303144')); p.drawRoundedRect(box,8,8)
         fill=QRectF(x if option.upsideDown else box.left(),box.top(),fraction*box.width(),box.height())
         p.setBrush(color); p.drawRoundedRect(fill,8,8); p.drawEllipse(QPointF(x,box.center().y()),10,10)
 
@@ -195,6 +309,8 @@ class StateButton(QPushButton):
         self.icon_only=icon_only
         self.title = title; self.options = options; self.callback = callback
         self.current = options[0][0]; self.held = False; self.menu = None
+        self.previous_icon=QIcon(); self.icon_kind=None; self.icon_transition=1; self.icon_started=0
+        self.icon_timer=QTimer(self); self.icon_timer.setInterval(16); self.icon_timer.timeout.connect(self.animate_icon)
         self.setIconSize(QSize(ICON_SIZE,ICON_SIZE)); self.setMinimumHeight(32)
         self.hold_timer = QTimer(self); self.hold_timer.setSingleShot(True)
         self.hold_timer.setInterval(550); self.hold_timer.timeout.connect(self.open_options)
@@ -220,9 +336,22 @@ class StateButton(QPushButton):
         option = next((o for o in self.options if o[0] == self.current),None)
         label=option[1] if option else self.title
         self.setText('' if self.icon_only else label)
-        self.setIcon(control_icon(option[2] if option else 'gauge'))
+        kind=option[2] if option else 'gauge'
+        self.icon_transition=1; self.icon_timer.stop()
+        self.icon_kind=kind; self.setIcon(control_icon(kind))
         self.setAccessibleName(tr(self.title)+': '+tr(label))
-        self.setToolTip(tr(self.title)+': '+tr(label) if self.icon_only else tr(self.title))
+        self.setToolTip(tr(self.title)+': '+tr(label) if self.icon_only or self.property('dashboard') else tr(self.title))
+
+    def animate_icon(self):
+        self.icon_transition=min(1,(time.monotonic()-self.icon_started)/.22); self.update()
+        if self.icon_transition>=1: self.icon_timer.stop()
+
+    def paint_icon(self,painter,kind,x,y,side,color=None):
+        painter.save()
+        if self.icon_transition<1:
+            painter.setOpacity(1-self.icon_transition); self.previous_icon.paint(painter,x,y,side,side)
+        painter.setOpacity(self.icon_transition); control_icon(kind,color=color).paint(painter,x,y,side,side)
+        painter.restore()
 
     def open_options(self):
         if not self.isDown(): return
@@ -250,10 +379,17 @@ class StateButton(QPushButton):
     def paintEvent(self,event):
         painter = QStylePainter(self); option = QStyleOptionButton(); self.initStyleOption(option)
         painter.drawControl(QStyle.ControlElement.CE_PushButtonBevel,option)
+        if self.objectName() == 'FpsLimit':
+            painter.setPen(self.palette().buttonText().color())
+            painter.drawText(self.rect(),Qt.AlignmentFlag.AlignCenter,'∞' if self.current == 0 else tr('Cap')+f' {self.current}')
+            return
         side = ICON_SIZE; x = 0 if self.objectName() == 'MetricValue' else 12
-        self.icon().paint(painter,x,(self.height()-side)//2,side,side,mode=QIcon.Mode.Normal if self.isEnabled() else QIcon.Mode.Disabled)
+        if isinstance(self,TemperatureButton): side=0; x=-8
+        else: self.paint_icon(painter,self.icon_kind,x,(self.height()-side)//2,side)
         painter.setPen(self.palette().buttonText().color())
-        painter.drawText(self.rect().adjusted(x+side+8,0,-12,0),Qt.AlignmentFlag.AlignLeft|Qt.AlignmentFlag.AlignVCenter,self.text())
+        rect = self.rect().adjusted(x+side+8,0,-12,0)
+        text = self.fontMetrics().elidedText(self.text(),Qt.TextElideMode.ElideRight,max(0,rect.width())) if self.property('dashboard') else self.text()
+        painter.drawText(rect,Qt.AlignmentFlag.AlignLeft|Qt.AlignmentFlag.AlignVCenter,text)
 
 
 class TemperatureButton(StateButton):
@@ -266,10 +402,236 @@ class TemperatureButton(StateButton):
 
 class ScreenshotButton(StateButton):
     def __init__(self, options, callback, capture):
-        super().__init__('截圖',options,callback); self.capture = capture
+        super().__init__('Screenshot',options,callback); self.capture = capture
 
     def cycle(self):
         if not self.held: self.capture()
+
+
+def paint_quick_tile(widget,painter,title,subtitle,kind,active=False,badge='',core=False,selected=False):
+    """Center the complete content block inside either fixed card specification."""
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    background=theme_color('#303144'); accent=theme_color('#a68bff'); ink=theme_color('#f2efff'); muted=theme_color('#b8b5ca')
+    if active:
+        background=QColor.fromRgbF(background.redF()*.8+accent.redF()*.2,background.greenF()*.8+accent.greenF()*.2,background.blueF()*.8+accent.blueF()*.2)
+    if not widget.isEnabled(): ink=muted
+    border=accent if active or selected or widget.hasFocus() else theme_color('#45465e')
+    pen=QPen(border,2 if selected else 1)
+    if selected: pen.setStyle(Qt.PenStyle.DashLine)
+    painter.setPen(pen); painter.setBrush(background); painter.drawRoundedRect(QRectF(widget.rect()).adjusted(1,1,-1,-1),10,10)
+    if widget.isDown():
+        pressed=QColor(accent); pressed.setAlpha(35); painter.setPen(Qt.PenStyle.NoPen); painter.setBrush(pressed)
+        painter.drawRoundedRect(QRectF(widget.rect()).adjusted(2,2,-2,-2),10,10)
+    title_font=QFont(widget.font()); title_font.setPixelSize(15 if core else 13); title_font.setBold(True)
+    state_font=QFont(widget.font()); state_font.setPixelSize(13 if core else 12)
+    painter.setFont(title_font); title_h=painter.fontMetrics().height(); title_w=painter.fontMetrics().horizontalAdvance(tr(title))
+    painter.setFont(state_font); state_h=painter.fontMetrics().height() if subtitle else 0; state_w=painter.fontMetrics().horizontalAdvance(tr(subtitle))
+    if core:
+        side=28; available=max(0,widget.width()-side-10-24)
+        text_w=min(max(title_w,state_w),available)
+        def lines_for(text,font,limit):
+            painter.setFont(font); metrics=painter.fontMetrics(); words=tr(text).split(); lines=[]; line=''
+            for word in words:
+                candidate=(line+' '+word).strip()
+                if line and metrics.horizontalAdvance(candidate)>available:
+                    lines.append(line); line=word
+                else: line=candidate
+            if line: lines.append(line)
+            if len(lines)>limit: lines=lines[:limit-1]+[' '.join(lines[limit-1:])]
+            return [metrics.elidedText(line,Qt.TextElideMode.ElideRight,max(0,round(available))) for line in lines]
+        title_limit=2 if title_w>available and 2*title_h+state_h+2<=widget.height()-12 else 1
+        state_limit=2 if subtitle and state_w>available and title_limit*title_h+2*state_h+2<=widget.height()-12 else 1
+        title_lines=lines_for(title,title_font,title_limit); state_lines=lines_for(subtitle,state_font,state_limit)
+        if title_w>available or state_w>available: text_w=available
+        left=(widget.width()-side-10-text_w)/2
+        if hasattr(widget,'paint_icon'): widget.paint_icon(painter,kind,round(left),round((widget.height()-side)/2),side,ink.name())
+        else: control_icon(kind,color=ink.name()).paint(painter,round(left),round((widget.height()-side)/2),side,side)
+        title_block=max(1,len(title_lines))*title_h; state_block=len(state_lines)*state_h
+        top=(widget.height()-title_block-state_block-(2 if state_lines else 0))/2
+        for lines,font,color,line_height,offset in [(title_lines,title_font,ink,title_h,0),(state_lines,state_font,muted,state_h,title_block+2)]:
+            painter.setFont(font); painter.setPen(color)
+            for index,line in enumerate(lines): painter.drawText(QRectF(left+side+10,top+offset+index*line_height,text_w,line_height),Qt.AlignmentFlag.AlignLeft|Qt.AlignmentFlag.AlignVCenter,line)
+        rects=[]
+        alignment=Qt.AlignmentFlag.AlignLeft|Qt.AlignmentFlag.AlignVCenter
+    else:
+        side=24; block_h=side+6+title_h+2+state_h; top=(widget.height()-block_h)/2
+        if hasattr(widget,'paint_icon'): widget.paint_icon(painter,kind,round((widget.width()-side)/2),round(top),side,ink.name())
+        else: control_icon(kind,color=ink.name()).paint(painter,round((widget.width()-side)/2),round(top),side,side)
+        rects=[QRectF(5,top+side+6,widget.width()-10,title_h),QRectF(5,top+side+6+title_h+2,widget.width()-10,state_h)]
+        alignment=Qt.AlignmentFlag.AlignCenter
+    for text,font,color,rect in zip((title,subtitle),(title_font,state_font),(ink,muted),rects):
+        painter.setFont(font); painter.setPen(color)
+        painter.drawText(rect,alignment,painter.fontMetrics().elidedText(tr(text),Qt.TextElideMode.ElideRight,max(0,round(rect.width()))))
+    if badge:
+        if badge == 'locked':
+            control_icon('lock',color=muted.name()).paint(painter,widget.width()-22,5,16,16); return
+        font=QFont(widget.font()); font.setPixelSize(11); painter.setFont(font); painter.setPen(muted)
+        painter.drawText(QRectF(widget.width()-24,4,20,16),Qt.AlignmentFlag.AlignCenter,badge)
+
+
+class QuickTile(StateButton):
+    def __init__(self,*args):
+        super().__init__(*args); self.setMinimumHeight(66); self.core=False; self.editing=False; self.display_state=None
+        self.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Preferred)
+        self.setProperty('dashboard',True)
+
+    def sizeHint(self): return QSize(104,96)
+    def minimumSizeHint(self): return QSize(0,66)
+
+    def presentation(self):
+        option = next((value for value in self.options if value[0] == self.current),None)
+        subtitle = option[1] if option else self.text()
+        if isinstance(self.current,bool) and self.title not in ('Fan linkage','Fan mode'): subtitle = 'On' if self.current else 'Off'
+        if self.display_state is not None: subtitle=self.display_state
+        active=(isinstance(self.current,bool) and self.current and self.title not in ('Fan linkage','Fan mode')) or (self.title == 'Lighting' and self.current not in (None,'off','disabled',''))
+        return subtitle,option[2] if option else 'gauge',active
+
+    def set_display_state(self,value): self.display_state=value; self.update()
+
+    def cycle(self):
+        if not self.editing: super().cycle()
+
+    def open_options(self):
+        if not self.editing: super().open_options()
+
+    def paintEvent(self,event):
+        subtitle,kind,active=self.presentation()
+        title='Focus' if self.title == 'Gamepad focus' else self.title
+        paint_quick_tile(self,QPainter(self),title,subtitle,kind,active,'',self.core)
+
+
+class ScreenshotTile(QuickTile):
+    def __init__(self,options,callback,capture):
+        super().__init__('Screenshot',options,callback); self.capture=capture
+
+    def cycle(self):
+        if not self.editing and not self.held: self.capture()
+
+
+class EditTile(QPushButton):
+    """Editor previews share the actual card appearance, without invoking hardware."""
+    def __init__(self,editor,selected):
+        super().__init__(); self.editor=editor; self.selected=selected; self.key=None; self.dragged=False; self.core=False
+        self.context_held=False; self.context_timer=QTimer(self); self.context_timer.setSingleShot(True); self.context_timer.setInterval(550)
+        self.context_timer.timeout.connect(self.open_context_menu)
+        self.setMinimumHeight(66); self.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Preferred)
+        self.setAcceptDrops(selected); self.clicked.connect(self.toggle)
+
+    def set_tile(self,key):
+        self.key=key; self.show()
+        if key:
+            title,kind=DASHBOARD_TILES[key]
+            self.setAccessibleName(tr('Select tile' if self.selected else 'Add tile')+': '+tr(title))
+            self.setToolTip(tr(title)); self.update()
+        else:
+            self.setAccessibleName(tr('Add tile')); self.setToolTip(tr('Add tile')); self.update()
+
+    def toggle(self):
+        if self.dragged or self.context_held: return
+        if self.selected:
+            if self.key: self.editor.select_dashboard_tile(self.key)
+            else: self.editor.show_available_tiles()
+        elif self.key: self.editor.toggle_dashboard_tile(self.key)
+
+    def sizeHint(self): return QSize(104,96)
+    def minimumSizeHint(self): return QSize(0,66)
+
+    def paintEvent(self,event):
+        if self.key:
+            title,kind=DASHBOARD_TILES[self.key]
+            subtitle='Add tile'; active=False
+            if self.selected:
+                subtitle,kind,active=self.editor.dashboard_tiles[self.key].presentation()
+            chosen=self.editor.editor_selection == self.key
+            paint_quick_tile(self,QPainter(self),title,subtitle,kind,active,'✓' if chosen and self.selected else '+' if not self.selected else '',core=self.core,selected=chosen and self.selected)
+        else:
+            paint_quick_tile(self,QPainter(self),'Add tile','','sliders-horizontal',badge='+')
+
+    def mousePressEvent(self,event):
+        self.dragged=False; self.context_held=False; self.origin=event.position().toPoint(); super().mousePressEvent(event)
+        if self.selected and self.key: self.context_timer.start()
+
+    def open_context_menu(self):
+        if not self.isDown() or not self.key: return
+        self.context_held=True; self.setDown(False); self.editor.open_tile_edit_menu(self.key)
+
+    def mouseMoveEvent(self,event):
+        if self.selected and self.key and event.buttons() & Qt.MouseButton.LeftButton and (event.position().toPoint()-self.origin).manhattanLength() >= QApplication.startDragDistance():
+            self.context_timer.stop(); self.dragged=True; self.setDown(False)
+            mime=QMimeData(); mime.setData(TILE_MIME,self.key.encode())
+            drag=QDrag(self); drag.setMimeData(mime); drag.setPixmap(self.grab()); drag.exec(Qt.DropAction.MoveAction)
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self,event):
+        self.context_timer.stop()
+        if self.dragged or self.context_held: self.setDown(False); event.accept(); return
+        super().mouseReleaseEvent(event)
+
+    def dragEnterEvent(self,event):
+        if event.mimeData().hasFormat(TILE_MIME): event.acceptProposedAction()
+
+    def dropEvent(self,event):
+        source=bytes(event.mimeData().data(TILE_MIME)).decode(errors='replace')
+        if self.editor.reorder_dashboard_tile(source,self.key): event.acceptProposedAction()
+
+
+class EmbeddedPopup(QWidget):
+    """Panel-local popup: independent of Wayland activation/fullscreen rules."""
+    def __init__(self,panel):
+        self.scrim=QWidget(panel); self.scrim.setObjectName('PopupScrim'); self.scrim.setStyleSheet('QWidget#PopupScrim { background:rgba(0,0,0,110); }'); self.scrim.hide()
+        super().__init__(self.scrim)
+        self.setObjectName('EmbeddedPopup'); self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground,True)
+        self.update_theme()
+        self.panel=panel; self.scrim.installEventFilter(self)
+
+    def update_theme(self):
+        self.setStyleSheet('QWidget#EmbeddedPopup { background:'+theme_color('#222331').name()+'; border:1px solid '+theme_color('#45465e').name()+'; border-radius:12px; }')
+
+    def showEvent(self,event):
+        self.scrim.setGeometry(self.panel.rect()); self.scrim.show(); self.scrim.raise_()
+        self.move(self.scrim.rect().center()-self.rect().center()); self.raise_()
+        super().showEvent(event)
+
+    def show(self):
+        self.scrim.setGeometry(self.panel.rect()); self.scrim.show(); self.scrim.raise_()
+        super().show()
+
+    def hideEvent(self,event):
+        self.scrim.hide(); super().hideEvent(event)
+
+    def accept(self): self.hide()
+    def reject(self): self.hide()
+
+    def eventFilter(self,watched,event):
+        if watched is self.scrim and event.type() == QEvent.Type.MouseButtonPress:
+            self.reject(); return True
+        return super().eventFilter(watched,event)
+
+
+class DashboardPage(QWidget):
+    def __init__(self,panel): super().__init__(); self.panel=panel
+
+    def resizeEvent(self,event):
+        super().resizeEvent(event)
+        if hasattr(self.panel,'dashboard_tile_area'):
+            self.panel.layout_dashboard_regions()
+
+
+class FpsMeter(QLabel):
+    clicked=pyqtSignal()
+    def mouseReleaseEvent(self,event):
+        if event.button() == Qt.MouseButton.LeftButton: self.clicked.emit(); event.accept()
+        else: super().mouseReleaseEvent(event)
+
+
+class ControlTabBar(QTabBar):
+    def __init__(self):
+        super().__init__(); self.setExpanding(True); self.setUsesScrollButtons(False); self.setElideMode(Qt.TextElideMode.ElideRight)
+
+    def tabSizeHint(self,index):
+        count=max(1,sum(self.isTabVisible(i) for i in range(self.count())))
+        return QSize(max(44,self.parentWidget().width()//count),44)
 
 
 class LightingPad(QWidget):
@@ -280,11 +642,11 @@ class LightingPad(QWidget):
     def __init__(self, minimum=0., maximum=1., sensitivity=4.):
         super().__init__()
         self.minimum = max(0.,min(1.,minimum)); self.maximum = max(self.minimum,min(1.,maximum))
-        self.sensitivity = max(1.,min(20.,sensitivity)); self.level = 0.; self.color = QColor('#0080ff')
+        self.sensitivity = max(1.,min(20.,sensitivity)); self.level = 0.; self.color = theme_color('#0080ff')
         self.handle = 1; self.dragging = False; self.color_open = False; self.color_dragging = False; self.controls_enabled = True; self.stick_angle = None; self.stick_remainder = 0.
         self.setMinimumSize(190,220); self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setAccessibleName(tr('亮度與靈敏度'))
-        self.setToolTip(tr('拖動兩個點：橫向調整最低／最高亮度，縱向調整靈敏度。'))
+        self.setAccessibleName(tr('Brightness and sensitivity'))
+        self.setToolTip(tr('Drag the two points: X sets minimum/maximum brightness, Y sets sensitivity.'))
 
     def plot(self): return QRectF(24,112,self.width()-48,max(60,self.height()-140))
 
@@ -322,7 +684,7 @@ class LightingPad(QWidget):
         p = QPainter(self); p.setRenderHint(QPainter.RenderHint.Antialiasing)
         if self.color_open:
             center=self.dial_center(); radius=self.dial_radius()
-            p.setBrush(QColor('#303144')); p.setPen(QPen(QColor('#bca6ff'),2))
+            p.setBrush(theme_color('#303144')); p.setPen(QPen(theme_color('#bca6ff'),2))
             p.drawRoundedRect(QRectF(self.rect()).adjusted(3,3,-3,-3),18,18)
             gradient=QConicalGradient(center,0)
             for i in range(7): gradient.setColorAt(i/6,QColor.fromHsvF((i%6)/6,1,1))
@@ -330,34 +692,34 @@ class LightingPad(QWidget):
             selected=round(max(0.,self.color.hueF())*12)%12
             for i in range(12):
                 angle=i*math.pi/6; direction=QPointF(math.cos(angle),-math.sin(angle))
-                p.setPen(QPen(QColor('#ffffff') if i==selected else QColor('#79798f'),4 if i==selected else 2))
+                p.setPen(QPen(theme_color('#ffffff') if i==selected else theme_color('#79798f'),4 if i==selected else 2))
                 p.drawLine(center+direction*(radius-13),center+direction*(radius+11))
             p.setBrush(self.color); p.setPen(Qt.PenStyle.NoPen); p.drawEllipse(center,15,15)
-            names=('紅色','橙色','黃色','黃綠色','綠色','薄荷綠','青色','天藍色','藍色','紫色','洋紅色','玫紅色')
-            p.setPen(QColor('#f2efff')); p.drawText(QRectF(center.x()-radius+20,center.y()+20,2*radius-40,45),Qt.AlignmentFlag.AlignCenter,tr(names[selected])+'\n'+self.color.name().upper())
+            names=('Red','Orange','Yellow','Lime','Green','Mint','Cyan','Sky blue','Blue','Purple','Magenta','Rose')
+            p.setPen(theme_color('#f2efff')); p.drawText(QRectF(center.x()-radius+20,center.y()+20,2*radius-40,45),Qt.AlignmentFlag.AlignCenter,tr(names[selected])+'\n'+self.color.name().upper())
             return
         center = QPointF(self.width()/2,42)
-        p.setBrush(QColor('#303144')); p.setPen(Qt.PenStyle.NoPen); p.drawEllipse(center,34,34)
+        p.setBrush(theme_color('#303144')); p.setPen(Qt.PenStyle.NoPen); p.drawEllipse(center,34,34)
         ring = QColor(self.color); ring.setAlphaF(.12+.88*self.level)
         if self.color_open:
             ring = QConicalGradient(center,0)
             for i in range(7): ring.setColorAt(i/6,QColor.fromHsvF((i%6)/6,1,1))
         p.setBrush(Qt.BrushStyle.NoBrush); p.setPen(QPen(QBrush(ring),7)); p.drawEllipse(center,29,29)
-        p.setBrush(QColor('#45465e')); p.setPen(QPen(QColor('#79798f'),1)); p.drawEllipse(center,20,20)
-        p.setPen(QColor('#f2efff'))
+        p.setBrush(theme_color('#45465e')); p.setPen(QPen(theme_color('#79798f'),1)); p.drawEllipse(center,20,20)
+        p.setPen(theme_color('#f2efff'))
         p.drawText(QRectF(0,79,self.width(),25),Qt.AlignmentFlag.AlignCenter,f'{round(self.minimum*100)}–{round(self.maximum*100)}% · S {round(math.log(self.sensitivity)/math.log(20)*100)}% · {round(self.level*100)}%')
-        box = self.plot(); p.setPen(QPen(QColor('#45465e'),1))
+        box = self.plot(); p.setPen(QPen(theme_color('#45465e'),1))
         for fraction in (0.,.5,1.):
             x=box.left()+fraction*box.width(); y=box.top()+fraction*box.height()
             p.drawLine(QPointF(x,box.top()),QPointF(x,box.bottom())); p.drawLine(QPointF(box.left(),y),QPointF(box.right(),y))
-        p.setPen(QColor('#b8b5ca')); p.drawText(QRectF(0,box.top()-3,24,20),Qt.AlignmentFlag.AlignCenter,tr('高'))
-        p.drawText(QRectF(0,box.bottom()-17,24,20),Qt.AlignmentFlag.AlignCenter,tr('低'))
-        p.drawText(QRectF(0,box.bottom()+6,self.width(),22),Qt.AlignmentFlag.AlignCenter,tr('亮度')+' 0 → 100%')
+        p.setPen(theme_color('#b8b5ca')); p.drawText(QRectF(0,box.top()-3,24,20),Qt.AlignmentFlag.AlignCenter,tr('High'))
+        p.drawText(QRectF(0,box.bottom()-17,24,20),Qt.AlignmentFlag.AlignCenter,tr('Low'))
+        p.drawText(QRectF(0,box.bottom()+6,self.width(),22),Qt.AlignmentFlag.AlignCenter,tr('Brightness')+' 0 → 100%')
         p.setPen(QPen(self.color,3)); p.drawLine(self.point(0),self.point(1))
         for handle in (0,1):
-            p.setBrush(QColor('#f2efff') if handle == self.handle else self.color)
+            p.setBrush(theme_color('#f2efff') if handle == self.handle else self.color)
             p.setPen(QPen(self.color,2)); p.drawEllipse(self.point(handle),10,10)
-            p.setPen(QColor('#222331')); p.drawText(QRectF(self.point(handle).x()-10,self.point(handle).y()-10,20,20),Qt.AlignmentFlag.AlignCenter,'−' if handle == 0 else '+')
+            p.setPen(theme_color('#222331')); p.drawText(QRectF(self.point(handle).x()-10,self.point(handle).y()-10,20,20),Qt.AlignmentFlag.AlignCenter,'−' if handle == 0 else '+')
 
     def adjust(self,position):
         box=self.plot(); value=max(0.,min(1.,(position.x()-box.left())/box.width()))
@@ -464,29 +826,29 @@ class FanCurve(QWidget):
         p=QPainter(self); p.setRenderHint(QPainter.RenderHint.Antialiasing)
         box=self.plot_box()
         def point(temp,pwm): return QPointF(box.left()+(temp-20)/80*box.width(),box.bottom()-pwm/255*box.height())
-        p.setPen(QPen(QColor('#45465e'),1))
+        p.setPen(QPen(theme_color('#45465e'),1))
         for temp in (20,40,60,80,100):
             x=point(temp,0).x(); p.drawLine(QPointF(x,box.top()),QPointF(x,box.bottom()))
-            p.setPen(QColor('#b8b5ca')); p.drawText(QRectF(x-20,box.bottom()+4,40,20),Qt.AlignmentFlag.AlignCenter,f'{temp}°'); p.setPen(QPen(QColor('#45465e'),1))
+            p.setPen(theme_color('#b8b5ca')); p.drawText(QRectF(x-20,box.bottom()+4,40,20),Qt.AlignmentFlag.AlignCenter,f'{temp}°'); p.setPen(QPen(theme_color('#45465e'),1))
         for percent in (0,50,100):
             y=point(20,percent*2.55).y(); p.drawLine(QPointF(box.left(),y),QPointF(box.right(),y))
-            p.setPen(QColor('#b8b5ca')); p.drawText(QRectF(0,y-10,37,20),Qt.AlignmentFlag.AlignRight|Qt.AlignmentFlag.AlignVCenter,f'{percent}%'); p.setPen(QPen(QColor('#45465e'),1))
+            p.setPen(theme_color('#b8b5ca')); p.drawText(QRectF(0,y-10,37,20),Qt.AlignmentFlag.AlignRight|Qt.AlignmentFlag.AlignVCenter,f'{percent}%'); p.setPen(QPen(theme_color('#45465e'),1))
         points=[point(min(20,self.curve['temperatures'][0]/1000-5),0),point(self.curve['temperatures'][0]/1000-5,0)]
         for temp,pwm in zip(self.curve['temperatures'],self.curve['pwm']):
             points.append(point(temp/1000,pwm))
         points.append(point(100,255))
         p.save(); p.setClipRect(box)
-        p.setPen(QPen(QColor('#bca6ff'),2.5)); p.drawPolyline(QPolygonF(points)); p.restore()
+        p.setPen(QPen(theme_color('#bca6ff'),2.5)); p.drawPolyline(QPolygonF(points)); p.restore()
         for i,(temp,pwm) in enumerate(zip(self.curve['temperatures'],self.curve['pwm'])):
             pos=point(temp/1000,pwm)
-            p.setPen(QPen(QColor('#bca6ff'),2)); p.setBrush(QColor('#bca6ff' if self.editable else '#303144'))
+            p.setPen(QPen(theme_color('#bca6ff'),2)); p.setBrush(theme_color('#bca6ff' if self.editable else '#303144'))
             p.drawEllipse(pos,8 if i==self.selected else 6,8 if i==self.selected else 6)
             if i==self.selected:
-                p.setPen(QColor('#ffffff'))
+                p.setPen(theme_color('#ffffff'))
                 p.drawText(QRectF(max(box.left(),min(pos.x()-65,box.right()-130)),max(box.top(),pos.y()-32),130,22),Qt.AlignmentFlag.AlignCenter,f'{temp/1000:.0f} °C · {pwm/2.55:.0f}%')
         if self.temperature is not None:
             x=point(max(20,min(100,self.temperature)),0).x()
-            p.setPen(QPen(QColor('#7de2ad'),1.5,Qt.PenStyle.DashLine)); p.drawLine(QPointF(x,box.top()),QPointF(x,box.bottom()))
+            p.setPen(QPen(theme_color('#7de2ad'),1.5,Qt.PenStyle.DashLine)); p.drawLine(QPointF(x,box.top()),QPointF(x,box.bottom()))
 
 
 class Choice(QWidget):
@@ -558,7 +920,7 @@ class ControlEndpoint(QDBusAbstractAdaptor):
         rules['General']['count']=str(len(ids))
         rules[rule]={'Description':'HandheldDash panel preserves game focus',
                      'wmclass':'org.aynthor.Control','wmclassmatch':'1',
-                     'title':tr('AYN Thor 中控台'),'titlematch':'1',
+                     'title':'HandheldDash','titlematch':'1',
                      'acceptfocus':'false','acceptfocusrule':'2'}
         file.parent.mkdir(parents=True,exist_ok=True)
         stage=file.with_suffix('.handhelddash-new')
@@ -573,10 +935,27 @@ class ControlEndpoint(QDBusAbstractAdaptor):
     def Settings(self): self.parent().Settings()
 
     @pyqtSlot()
+    def Customize(self):
+        self.parent().Settings(); self.parent().open_dashboard_editor()
+
+    @pyqtSlot()
     def ExitTouchpad(self): self.parent().exit_touchpad()
 
     @pyqtSlot(str,result=bool)
     def Snapshot(self,path): return self.parent().Snapshot(path)
+
+    @pyqtSlot(str,result=bool)
+    def SnapshotEnglish(self,path): return self.parent().snapshot_english(path)
+
+    @pyqtSlot(str)
+    def Adjustment(self,key):
+        if key in ('brightness','volume'): self.parent().open_adjustment(key)
+
+    @pyqtSlot(str,result=bool)
+    def PopupSnapshot(self,path):
+        popup=QApplication.activePopupWidget()
+        if popup is None: popup=next((dialog for dialog in self.parent().adjustment_dialogs.values() if dialog.isVisible()),None)
+        return bool(popup and popup.grab().save(path))
 
     @pyqtSlot(str)
     def WindowList(self,raw): self.parent().WindowList(raw)
@@ -626,7 +1005,7 @@ class Touchpad(QWidget):
 
     def paintEvent(self,event):
         p = QPainter(self); p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.setBrush(QColor('#303144')); p.setPen(QPen(QColor('#79718d'),1))
+        p.setBrush(theme_color('#303144')); p.setPen(QPen(theme_color('#79718d'),1))
         p.drawRoundedRect(QRectF(self.rect()).adjusted(1,1,-1,-1),18,18)
 
 
@@ -657,7 +1036,7 @@ class Panel(QWidget):
         self.touch_calibration = [1,0,0,0,1,0]
         self.screen_blanks = {}
         self.error_text = None
-        self.setWindowTitle(tr('AYN Thor 中控台'))
+        self.setWindowTitle('HandheldDash')
         self.setObjectName('ThorPanel')
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
         self.setWindowFlag(Qt.WindowType.FramelessWindowHint)
@@ -676,15 +1055,18 @@ class Panel(QWidget):
         self.session.registerService(APP)
         self.endpoint = ControlEndpoint(self)
         self.session.registerObject('/Control', self, QDBusConnection.RegisterOption.ExportAdaptors)
-        QApplication.instance().setStyleSheet('''
+        self.theme_css = '''
             QWidget { background:#222331; color:#f2efff; font-size:14px; }
             QWidget#ThorPanel { background:#222331; }
             QLabel#Title { font-size:22px; font-weight:700; }
-            QLabel#Fps { font-size:36px; font-weight:800; color:#bca6ff; }
+            QLabel#HeaderTitle { font-size:14px; font-weight:600; }
+            QLabel#Fps { font-size:18px; font-weight:700; color:#bca6ff; }
             QWidget#Gauge { background:#303144; border-radius:12px; }
             QWidget#Gauge QWidget { background:transparent; }
             QWidget#MetricIcon { background:transparent; }
+            QLabel#SectionTitle { background:transparent; color:#b8b5ca; font-size:12px; font-weight:600; }
             QPushButton#MetricValue { background:transparent; border:0; border-radius:0; padding:0; min-height:0; }
+            QLabel#MetricReading { font-size:12px; }
             QWidget#Gauge QProgressBar { background:#45465e; }
             QProgressBar { background:#45465e; border:0; border-radius:3px; height:6px; }
             QProgressBar::chunk { background:#a68bff; border-radius:3px; }
@@ -695,22 +1077,16 @@ class Panel(QWidget):
             QMenu { background:#303144; color:#f2efff; border:1px solid #45465e; border-radius:8px; padding:6px; menu-scrollable:1; }
             QMenu::item { padding:10px 16px; min-height:24px; border-radius:6px; } QMenu::item:selected { background:#7755d9; }
             QMenu::item:disabled { color:#79798f; } QMenu::separator { height:1px; background:#45465e; margin:5px; }
-            QTabWidget::pane { border:0; } QTabBar::tab { padding:10px 18px; background:#303144; }
+            QTabWidget::pane { border:0; } QTabBar::tab { padding:6px 8px; background:#303144; }
             QTabBar::tab:selected { background:#7755d9; }
             QLineEdit { background:#303144; border:1px solid #45465e; border-radius:8px; padding:7px; }
-            QTabWidget::tab-bar { alignment:center; } QLabel#Notice { color:#b8b5ca; font-size:12px; }
-        ''')
-        root = QVBoxLayout(self)
-        header = QHBoxLayout()
-        title = QLabel('AYN / THOR'); title.setObjectName('Title')
-        header.addWidget(title); header.addStretch()
-        self.battery_icon = MetricIcon('battery'); header.addWidget(self.battery_icon)
-        self.battery_text = QLabel('—%'); header.addWidget(self.battery_text)
-        self.clock = QLabel(); header.addWidget(self.clock)
-        close = QPushButton('×'); close.setFixedWidth(44); close.clicked.connect(self.hide); header.addWidget(close)
-        root.addLayout(header)
-        self.tabs = QTabWidget(); self.tabs.setTabPosition(QTabWidget.TabPosition.South); root.addWidget(self.tabs)
-        self.page_titles = []
+            QTabWidget::tab-bar { alignment:left; } QLabel#Notice { color:#b8b5ca; font-size:12px; }
+        '''
+        self.apply_theme()
+        self.theme_timer = QTimer(self); self.theme_timer.timeout.connect(self.apply_theme); self.theme_timer.start(3000)
+        self.menu_timer = QTimer(self); self.menu_timer.timeout.connect(self.sync_desktop_actions); self.menu_timer.start(60000)
+        QTimer.singleShot(1000,self.sync_desktop_actions)
+        self.make_shell()
         self.make_control(); self.make_tasks(); self.make_screen(); self.make_fan(); self.make_lighting(); self.make_touchpad(); self.make_settings()
         resident = self.prefs.get('resident_tabs',self.page_titles)
         self.tabs.setCurrentIndex(next((i for i,title in enumerate(self.page_titles) if title in resident),self.settings_index))
@@ -729,6 +1105,57 @@ class Panel(QWidget):
             screen.orientationChanged.connect(lambda orientation:self.configure_pointer())
         self.refresh()
         QTimer.singleShot(0,lambda:self.set_cpu_affinity(self.prefs['panel_cpu_affinity'],False))
+
+    def sync_desktop_actions(self):
+        helper = Path(__file__).resolve().parent/'desktop_launch.py'
+        if not helper.exists(): helper = Path('/usr/lib/aynthor/desktop_launch.py')
+        self.start(sys.executable,str(helper),'--sync')
+
+    def make_shell(self):
+        root = QVBoxLayout(self); root.setContentsMargins(12,12,12,12); root.setSpacing(8)
+        header_widget=QWidget(); header_widget.setFixedHeight(44)
+        self.header=QHBoxLayout(header_widget); self.header.setContentsMargins(0,0,0,0); self.header.setSpacing(6)
+        self.header_title=QLabel('HandheldDash'); self.header_title.setObjectName('HeaderTitle'); self.header_title.setFixedWidth(110)
+        self.header.addWidget(self.header_title); self.header.addStretch()
+        self.battery_icon = MetricIcon('battery'); self.header.addWidget(self.battery_icon)
+        self.battery_text = QLabel('—%'); self.battery_text.setFixedWidth(34); self.battery_text.setStyleSheet('font-size:12px;'); self.header.addWidget(self.battery_text)
+        self.clock = QLabel(); self.clock.setFixedWidth(40); self.clock.setStyleSheet('font-size:12px;'); self.header.addWidget(self.clock)
+        close = QPushButton('×'); close.setFixedSize(44,44); close.setStyleSheet('padding:0; min-height:0; border-radius:10px;'); close.clicked.connect(self.hide); self.header.addWidget(close); close.hide()
+        root.addWidget(header_widget)
+        self.tabs = QTabWidget(); self.tabs.setTabBar(ControlTabBar()); self.tabs.setTabPosition(QTabWidget.TabPosition.South)
+        self.tabs.setSizePolicy(QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Ignored); root.addWidget(self.tabs,1)
+        self.page_titles = []
+
+    def apply_theme(self):
+        from PyQt6.QtCore import QSettings
+        file = CONFIG.parent/'kdeglobals'
+        stamp = file.stat().st_mtime_ns if file.exists() else 0
+        if getattr(self,'theme_stamp',None) == stamp: return
+        self.theme_stamp = stamp
+        settings = QSettings(str(file),QSettings.Format.IniFormat)
+        palette = QApplication.instance().palette()
+        def color(group,key,role):
+            value = settings.value(group+'/'+key)
+            if isinstance(value,list): value = ','.join(value)
+            if value:
+                try: return QColor(*map(int,str(value).split(',')[:3])).name()
+                except (TypeError,ValueError): pass
+            return palette.color(role).name()
+        window = color('Colors:Window','BackgroundNormal',QPalette.ColorRole.Window)
+        text = color('Colors:Window','ForegroundNormal',QPalette.ColorRole.WindowText)
+        button = color('Colors:Button','BackgroundNormal',QPalette.ColorRole.Button)
+        accent = color('Colors:Selection','BackgroundNormal',QPalette.ColorRole.Highlight)
+        muted = color('Colors:Window','ForegroundInactive',QPalette.ColorRole.PlaceholderText)
+        THEME.update({key:value for keys,value in [(['#222331'],window),(['#f2efff','#ffffff','#e5ddff'],text),(['#303144','#36374a'],button),(['#a68bff','#bca6ff','#7755d9','#a58cf8','#4c4268'],accent),(['#45465e','#79798f','#b8b5ca','#79718d'],muted)] for key in keys})
+        css = self.theme_css
+        for old,new in THEME.items(): css = css.replace(old,new)
+        selected_text = color('Colors:Selection','ForegroundNormal',QPalette.ColorRole.HighlightedText)
+        css += 'QPushButton:checked, QMenu::item:selected, QTabBar::tab:selected { color:'+selected_text+'; }'
+        QApplication.instance().setStyleSheet(css)
+        control_icon.cache_clear()
+        for widget in self.findChildren(StateButton): widget.render()
+        for widget in self.findChildren(EmbeddedPopup): widget.update_theme()
+        self.update()
 
     def install_placement(self):
         CONFIG.mkdir(parents=True, exist_ok=True)
@@ -781,8 +1208,8 @@ reportCursor();
         for label in self.notices:
             label.setText(text); label.setVisible(bool(text))
 
-    def page(self, title):
-        widget = QWidget(); layout = QVBoxLayout(widget)
+    def page(self, title, widget=None):
+        widget = widget if widget is not None else QWidget(); layout = QVBoxLayout(widget)
         self.page_titles.append(title)
         self.tabs.addTab(widget, tr(title))
         return layout
@@ -805,7 +1232,7 @@ reportCursor();
 
     def make_touchpad(self):
         self.touchpad_index = self.tabs.count()
-        layout = self.page('觸控板')
+        layout = self.page('Touchpad')
         layout.setContentsMargins(0,0,0,0)
         self.touchpad = Touchpad(self); layout.addWidget(self.touchpad,1)
 
@@ -815,8 +1242,9 @@ reportCursor();
             self.open_tab(0)
 
     def keyPressEvent(self,event):
-        if event.key() == Qt.Key.Key_Escape and self.touchpad.isVisible():
-            self.exit_touchpad(); event.accept(); return
+        if event.key() == Qt.Key.Key_Escape:
+            if self.touchpad.isVisible(): self.exit_touchpad()
+            event.accept(); return
         super().keyPressEvent(event)
 
     def focus_upper(self):
@@ -875,7 +1303,7 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
     def center_pointer(self):
         screen = next((s for s in QApplication.screens() if s.name() == 'DSI-2'),None)
         if screen is None or self.cursor_position is None:
-            self.notify(tr('找不到上屏鼠標接口')); return
+            self.notify(tr('Top-screen pointer interface is unavailable')); return
         rect = screen.geometry(); dx=dy=0
         if not rect.contains(self.cursor_position.toPoint()):
             delta = QPointF(rect.center())-self.cursor_position
@@ -887,59 +1315,358 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
         return button
 
     def make_control(self):
-        layout = self.page('中控')
-        top = QHBoxLayout()
-        self.fps = QLabel('— FPS'); self.fps.setObjectName('Fps'); top.addWidget(self.fps)
-        self.fps_source = QLabel(''); self.fps_source.setObjectName('Notice'); self.fps_source.setWordWrap(True); top.addWidget(self.fps_source,1)
-        self.fps_mode = StateButton('FPS',[(0,'不限幀','infinity'),(30,'30 FPS','fps-30'),(60,'60 FPS','fps-60'),(120,'120 FPS','fps-120')],self.set_fps_limit,icon_only=True)
-        self.fps_mode.setStyleSheet('padding:5px 10px; min-height:22px;')
-        self.fps_mode.setIconSize(QSize(32,32)); self.fps_mode.setFixedSize(52,42)
-        self.fps_mode.show_value(self.prefs['fps_limit']); top.addWidget(self.fps_mode)
-        layout.addLayout(top)
-        grid = QGridLayout(); grid.setVerticalSpacing(6); layout.addLayout(grid)
-        self.autolock = StateButton('Caffine',[(False,'Caffine','lock-open'),(True,'Caffine','lock')],self.set_autolock)
-        try:
-            self.prefs['autolock'] = subprocess.check_output(['kreadconfig6','--file','kscreenlockerrc','--group','Daemon','--key','Autolock','--default','true'],text=True,timeout=5).strip() == 'true'
-        except (OSError,subprocess.SubprocessError): pass
-        self.autolock.show_value(self.prefs['autolock'])
-        self.performance = StateButton('效能', [('quiet','安靜','leaf'),('standard','標準','gauge'),('performance','高效能','zap')], lambda v:self.set('performance',[v]))
-        self.fan_link_control = StateButton('風扇聯動',self.fan_link_choices(),self.set_fan_follow)
-        self.input_mode = StateButton('輸入模式',[('gamepad','手柄模式','gamepad'),('mouse','鼠標模式','mouse')],lambda v:self.set('joystick',[v]))
-        self.gamepad_focus = StateButton('手柄焦點',[('auto','自動切換','gamepad'),('top','鎖定上屏','monitor'),('bottom','鎖定下屏','monitor')],self.set_gamepad_focus)
+        self.dashboard_page_widget=DashboardPage(self); layout = self.page('Control',self.dashboard_page_widget)
+        layout.setContentsMargins(0,0,0,8); layout.setSpacing(8)
+        self.dashboard_editing=False; self.editor_selection=None; self.dashboard_draft=dashboard_layout(self.prefs.get('dashboard_layout'))
+        self.metric_hold_timer=QTimer(self); self.metric_hold_timer.setSingleShot(True); self.metric_hold_timer.setInterval(550); self.metric_hold_timer.timeout.connect(self.open_metric_context)
+        self.metric_press_key=None; self.metric_dragged=False; self.metric_held=False
+        self.fps = FpsMeter('— FPS'); self.fps.setObjectName('Fps'); self.fps.setFixedWidth(70); self.header.insertWidget(1,self.fps); self.fps.clicked.connect(self.open_fps_menu)
+        self.fps_source = QLabel('',self.dashboard_page_widget); self.fps_source.hide()
+        self.fps_mode = StateButton('FPS',[(0,'Unlimited','infinity'),(30,'30 FPS','fps-30'),(60,'60 FPS','fps-60'),(120,'120 FPS','fps-120')],self.set_fps_limit,icon_only=True)
+        self.fps_mode.setObjectName('FpsLimit'); self.fps_mode.setStyleSheet('padding:0; min-height:0; border-radius:10px; font-size:12px;')
+        self.fps_mode.setFixedSize(64,44); self.fps_mode.show_value(self.prefs['fps_limit']); self.fps_mode.setParent(self); self.fps_mode.hide()
+        edit = self.button('',self.dashboard_edit_tap); edit.setIcon(control_icon('pencil'))
+        edit.setFixedSize(44,44); edit.setStyleSheet('padding:0; min-height:0; border-radius:10px;')
+        edit.setAccessibleName(tr('Customize dashboard')); edit.setToolTip(tr('Customize dashboard')); self.header.insertWidget(self.header.count()-1,edit)
+        self.dashboard_edit_button=edit
+        self.dashboard_widgets = {}; self.dashboard_tiles = {}
+        self.dashboard_info=QStackedWidget(); self.dashboard_info.setFixedHeight(94)
+        self.dashboard_metrics = QWidget(); metrics_box=QVBoxLayout(self.dashboard_metrics); metrics_box.setContentsMargins(0,0,0,0)
+        metrics_grid=QGridLayout(); self.dashboard_metrics_grid=metrics_grid; metrics_grid.setSpacing(6); metrics_box.addLayout(metrics_grid)
+        for column in range(3): metrics_grid.setColumnStretch(column,1)
+        self.dashboard_info.addWidget(self.dashboard_metrics); self.make_editor_toolbar(); layout.addWidget(self.dashboard_info)
+        self.dashboard_tile_area=QWidget(); tile_box=QVBoxLayout(self.dashboard_tile_area); tile_box.setContentsMargins(0,0,0,0); tile_box.setSpacing(8)
+        self.dashboard_core_area=QWidget(); self.dashboard_core_area.setFixedHeight(72)
+        self.dashboard_core_grid=QGridLayout(self.dashboard_core_area); self.dashboard_core_grid.setContentsMargins(0,0,0,0); self.dashboard_core_grid.setSpacing(8)
+        for column in range(2): self.dashboard_core_grid.setColumnStretch(column,1)
+        tile_box.addWidget(self.dashboard_core_area)
+        self.dashboard_shortcut_area=QWidget(); self.dashboard_grid=QGridLayout(self.dashboard_shortcut_area)
+        self.dashboard_grid.setContentsMargins(0,0,0,0); self.dashboard_grid.setSpacing(8)
+        for column in range(5): self.dashboard_grid.setColumnStretch(column,1)
+        for row in range(2): self.dashboard_grid.setRowStretch(row,1)
+        tile_box.addWidget(self.dashboard_shortcut_area,1); layout.addWidget(self.dashboard_tile_area); layout.addStretch(1)
+        self.editor_selected_tiles=[]
+        for index in range(12):
+            tile=EditTile(self,True); tile.setParent(self.dashboard_shortcut_area); tile.hide(); self.editor_selected_tiles.append(tile)
+        self.caffeine_cookies = []
+        self.autolock = QuickTile('Caffine',[(False,'Caffine Off','coffee-off'),(True,'Caffine On','coffee')],self.set_autolock)
+        self.autolock.show_value(False)
+        QTimer.singleShot(0,lambda:self.set_autolock(self.prefs.get('caffeine_enabled',False)))
+        self.performance = QuickTile('Performance mode', [('quiet','Quiet','leaf'),('standard','Balanced','gauge'),('performance','Performance','zap')], lambda v:self.set('performance',[v]))
+        self.fan_link_control = QuickTile('Fan mode',self.fan_link_choices(),self.set_fan_follow)
+        self.input_mode = QuickTile('Input mode',[('gamepad','Gamepad mode','gamepad'),('mouse','Mouse mode','mouse')],lambda v:self.set('joystick',[v]))
+        self.gamepad_focus = QuickTile('Gamepad focus',[('auto','Automatic','gamepad'),('top','Lock top screen','monitor'),('bottom','Lock bottom screen','monitor')],self.set_gamepad_focus)
         self.gamepad_focus.show_value(self.prefs.get('gamepad_focus','auto'))
-        self.gamepad_focus.setToolTip(tr('控制桌面焦點，不能隔離自行讀取手柄的應用。'))
-        bypass = StateButton('旁路供電',[(None,'旁路不支援','battery')],lambda v:None); bypass.setEnabled(False)
-        self.vibration = StateButton('震動',[(False,'震動關閉','bell-off'),(True,'震動開啟','vibration')],lambda v:self.set('vibration',['on' if v else 'off']))
-        self.rgb = StateButton('氛圍燈',self.lighting_choices(),self.set_rgb_mode)
-        for i, button in enumerate([self.autolock,self.performance,self.fan_link_control,self.input_mode,self.gamepad_focus,bypass,self.vibration,self.rgb]):
-            button.setStyleSheet('padding:5px 10px; min-height:22px;'); grid.addWidget(button,i//2,i%2)
-        gauges = QGridLayout(); self.gauges = {}; self.metric_icons = {}
-        for i,(key,title,icon) in enumerate([('cpu','CPU','cpu'),('gpu','GPU','video-display'),('temp','溫度','temperature-normal'),('fan','風扇','fan'),('ram','RAM','memory'),('battery','功率','zap')]):
-            card = QWidget(); card.setObjectName('Gauge'); box = QVBoxLayout(card); box.setContentsMargins(9,7,9,7); box.setSpacing(4)
+        self.gamepad_focus.setToolTip(tr('Controls desktop focus; apps reading gamepad devices directly are not isolated.'))
+        self.vibration = QuickTile('Vibration',[(False,'Rumble off','vibrate-off'),(True,'Rumble on','vibrate')],lambda v:self.set('vibration',['on' if v else 'off']))
+        self.rgb = QuickTile('Lighting',self.lighting_choices(),self.set_rgb_mode)
+        for key,button in [('caffeine',self.autolock),('performance',self.performance),('fan_link',self.fan_link_control),('input',self.input_mode),('focus',self.gamepad_focus),('vibration',self.vibration),('lighting',self.rgb)]:
+            self.dashboard_widgets[('controls',key)] = button; self.dashboard_tiles[key]=button
+            if key in CORE_TILES:
+                button.core=True; button.setMinimumHeight(72); self.dashboard_core_grid.addWidget(button,0,CORE_TILES.index(key))
+        self.gauges = {}; self.metric_icons = {}
+        for i,(key,title,icon) in enumerate([('cpu','CPU','cpu'),('gpu','GPU','video-display'),('temp','Temperature','temperature-normal'),('fan','Fan','fan'),('ram','RAM','memory'),('battery','Power','zap'),('load','System load','activity'),('network','Network speed','network'),('disk_io','Disk IO','disk')]):
+            card = QWidget(); card.setObjectName('Gauge'); card.setFixedHeight(44); card.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Fixed); box = QVBoxLayout(card); box.setContentsMargins(8,5,8,5); box.setSpacing(0)
             row = QHBoxLayout(); row.setSpacing(8); image = MetricIcon('power' if key == 'battery' else key); self.metric_icons[key] = image
             if key == 'temp':
-                value=TemperatureButton('溫度',[('battery','電池 · — °C','thermometer')],lambda v:self.select_temperature(v)); self.temperature_button=value
+                row.addWidget(image)
+                value=TemperatureButton('Temperature',[('battery','Battery · — °C','thermometer')],lambda v:self.select_temperature(v)); self.temperature_button=value
                 value.setObjectName('MetricValue'); value.setMinimumHeight(24); value.setMaximumHeight(28)
                 value.show_value(self.prefs.get('temperature_sensor','battery'))
             else:
-                row.addWidget(image); value = QLabel(title)
+                row.addWidget(image); value = QLabel(title); value.setObjectName('MetricReading')
                 if key == 'battery':
-                    self.power_temperature = QLabel('— °C'); row.addWidget(self.power_temperature)
+                    self.power_temperature = QLabel('— °C'); self.power_temperature.setObjectName('MetricReading'); row.addWidget(self.power_temperature)
+                    value.setWordWrap(True)
                     value.setAlignment(Qt.AlignmentFlag.AlignRight|Qt.AlignmentFlag.AlignVCenter)
             row.addWidget(value,1); box.addLayout(row)
-            bar = QProgressBar(); bar.setRange(0,1000); bar.setTextVisible(False); bar.setFixedHeight(6); box.addWidget(bar)
-            gauges.addWidget(card,i//3,i%3); self.gauges[key]=(value,bar)
-        layout.addLayout(gauges)
-        bottom = QHBoxLayout()
-        self.shot = ScreenshotButton(self.screenshot_choices(),self.set_screenshot_mode,self.screenshot)
-        self.shot.show_value(self.prefs.get('screenshot_mode','top')); self.shot.setToolTip(tr('點擊截圖，長按切換模式')); bottom.addWidget(self.shot)
-        overview = StateButton('工作概覽',[(None,'工作概覽','panels-top-left')],lambda v:self.action('overview')); bottom.addWidget(overview)
-        self.hud = StateButton('FPS 浮層',[(False,'浮層關閉','eye-off'),(True,'浮層開啟','activity')],self.set_hud)
-        self.hud.show_value(self.prefs['hud']); bottom.addWidget(self.hud); layout.addLayout(bottom)
+            if key in ('load','network','disk_io'): value.setStyleSheet('font-size:11px;')
+            bar = QProgressBar(card); bar.setRange(0,1000); bar.hide()
+            metrics_grid.addWidget(card,i//3,i%3); self.dashboard_widgets[('metrics',key)] = card; self.gauges[key]=(value,bar)
+            metric_key={'temp':'temperature','ram':'memory'}.get(key,key); card.setProperty('metric_key',metric_key); card.setAcceptDrops(True)
+            card.installEventFilter(self)
+            for child in card.findChildren(QWidget): child.setProperty('metric_key',metric_key); child.setAcceptDrops(True); child.installEventFilter(self)
+        self.metric_add_slots=[]
+        for index in range(6):
+            button=self.button('',self.show_available_metrics); button.setIcon(control_icon('plus')); button.setObjectName('Gauge'); button.setAccessibleName(tr('Add metric')); button.hide(); button.setParent(self.dashboard_metrics); self.metric_add_slots.append(button)
+        self.shot = ScreenshotTile(self.screenshot_choices(),self.set_screenshot_mode,self.screenshot)
+        self.shot.show_value(self.prefs.get('screenshot_mode','top')); self.shot.setToolTip(tr('Tap to capture, hold to change mode'))
+        overview = QuickTile('Overview',[(None,'Open overview','panels-top-left')],lambda v:self.action('overview'))
+        self.hud = QuickTile('FPS overlay',[(False,'Overlay off','eye-off'),(True,'Overlay on','eye')],self.set_hud)
+        self.hud.show_value(self.prefs['hud'])
+        for key,button in [('screenshot',self.shot),('overview',overview),('hud',self.hud)]:
+            self.dashboard_widgets[('actions',key)] = button; self.dashboard_tiles[key]=button
+        for key,title,icon in [('brightness','Brightness','sun'),('volume','Volume','volume-2')]:
+            self.dashboard_tiles[key]=QuickTile(title,[(None,'Adjust','sun' if key == 'brightness' else 'volume-2')],lambda value,k=key:self.open_adjustment(k))
+        self.dashboard_tiles['move_app']=QuickTile('Move current app',[(None,'Move current app','arrow-left-right')],lambda value:self.action('swap'))
+        self.apply_dashboard_layout()
+
+    def apply_dashboard_layout(self):
+        configuration = self.dashboard_draft if self.dashboard_editing else dashboard_layout(self.prefs.get('dashboard_layout'))
+        self.fps.setVisible(configuration.get('show_fps',True)); self.fps_mode.hide()
+        self.header_title.setFixedWidth(90 if self.dashboard_editing else 110)
+        self.clock.setVisible(not self.dashboard_editing)
+        for button in self.editor_header_actions: button.setVisible(self.dashboard_editing)
+        self.dashboard_edit_button.setVisible(not self.dashboard_editing)
+        self.fps_mode.setEnabled(not self.dashboard_editing and self.prefs.get('mangohud_mode') == 'takeover')
+        while self.dashboard_metrics_grid.count(): self.dashboard_metrics_grid.takeAt(0)
+        for button in self.metric_add_slots: button.hide()
+        for key in ('cpu','gpu','temp','fan','ram','battery','load','network','disk_io'): self.dashboard_widgets[('metrics',key)].hide()
+        for index,key in enumerate(configuration.get('metric_order',['cpu','gpu','temperature','fan','memory','battery'])):
+            card=self.dashboard_widgets[('metrics',{'temperature':'temp','memory':'ram'}.get(key,key))]; self.dashboard_metrics_grid.addWidget(card,index//3,index%3); card.show()
+            card.setStyleSheet('QWidget#Gauge { border:1px dashed '+theme_color('#a68bff').name()+'; }' if self.editor_selection == 'metric:'+key else '')
+        if self.dashboard_editing:
+            for index in range(len(configuration.get('metric_order',[])),6):
+                button=self.metric_add_slots[index]; self.dashboard_metrics_grid.addWidget(button,index//3,index%3); button.show()
+        self.dashboard_info.setVisible(self.dashboard_editing or (configuration['metrics'] and bool(configuration.get('metric_order',['cpu','gpu','temperature','fan','memory','battery']))))
+        self.dashboard_info.setCurrentIndex(0); self.layout_dashboard_regions()
+        tiles=configuration['tiles']
+        while self.dashboard_grid.count(): self.dashboard_grid.takeAt(0)
+        while self.dashboard_core_grid.count(): self.dashboard_core_grid.takeAt(0)
+        for key,widget in self.dashboard_tiles.items():
+            widget.editing=self.dashboard_editing
+            widget.core=key in tiles[:2]
+            if widget.parentWidget() is not self.dashboard_shortcut_area: widget.setParent(self.dashboard_shortcut_area)
+            widget.hide()
+        for index,tile in enumerate(self.editor_selected_tiles):
+            tile.hide()
+            core=index<2; grid=self.dashboard_core_grid if core else self.dashboard_grid
+            row=0 if core else (index-2)//5; column=index if core else (index-2)%5
+            if self.dashboard_editing:
+                tile.core=core; grid.addWidget(tile,row,column); tile.set_tile(tiles[index] if index<len(tiles) else None)
+            elif index<len(tiles):
+                widget=self.dashboard_tiles[tiles[index]]; grid.addWidget(widget,row,column); widget.show()
+        self.editor_add.setEnabled(True)
+        self.sync_monitoring()
+
+    def sync_monitoring(self):
+        configuration=self.dashboard_draft if self.dashboard_editing else dashboard_layout(self.prefs.get('dashboard_layout'))
+        items=configuration.get('metric_order',['cpu','gpu','temperature','fan','memory','battery']) if self.dashboard_editing or configuration['metrics'] else []
+        payload=json.dumps({'items':items,'modes':configuration.get('metric_modes',{})})
+        self.call('SetMonitoring',[payload],quiet=True)
+        timer=self.metric_icons['fan'].timer
+        if 'fan' in items:
+            if not timer.isActive(): self.metric_icons['fan'].last_frame=time.monotonic(); timer.start(50)
+        else: timer.stop()
+
+    def open_dashboard_editor(self):
+        visible=self.isVisible()
+        self.setWindowTitle('HandheldDash Settings')
+        self.setWindowFlag(Qt.WindowType.WindowDoesNotAcceptFocus,False)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating,False)
+        self.dashboard_draft = dashboard_layout(self.prefs.get('dashboard_layout'))
+        self.dashboard_editing=True; self.editor_selection=None; self.header_title.setText('Edit dashboard')
+        self.open_tab(0); self.refresh_dashboard_editor()
+        if visible: self.showFullScreen(); self.raise_(); self.activateWindow()
+
+    def layout_dashboard_regions(self):
+        height=max(300,self.dashboard_page_widget.height()); metrics=max(80,round(height*.23))
+        self.dashboard_info.setFixedHeight(metrics)
+        for key in ('cpu','gpu','temp','fan','ram','battery','load','network','disk_io'): self.dashboard_widgets.get(('metrics',key),self.dashboard_metrics).setFixedHeight(max(36,(metrics-6)//2))
+        for button in self.metric_add_slots: button.setFixedHeight(max(36,(metrics-6)//2))
+        area=max(220,height-(metrics if not self.dashboard_info.isHidden() else 0)-16)
+        self.dashboard_tile_area.setFixedHeight(area); self.dashboard_core_area.setFixedHeight(max(66,round(area*.23)))
+
+    def eventFilter(self,watched,event):
+        key=watched.property('metric_key')
+        if self.dashboard_editing and key:
+            kind=event.type()
+            if kind == QEvent.Type.MouseButtonPress:
+                self.metric_press_key=key; self.metric_origin=event.globalPosition().toPoint(); self.metric_dragged=False; self.metric_held=False; self.metric_hold_timer.start(); return True
+            if kind == QEvent.Type.MouseMove and event.buttons() & Qt.MouseButton.LeftButton and self.metric_press_key:
+                if not self.metric_dragged and (event.globalPosition().toPoint()-self.metric_origin).manhattanLength() >= QApplication.startDragDistance():
+                    self.metric_hold_timer.stop(); self.metric_dragged=True; mime=QMimeData(); mime.setData(TILE_MIME,('metric:'+self.metric_press_key).encode()); drag=QDrag(watched); drag.setMimeData(mime); drag.setPixmap(watched.grab()); drag.exec(Qt.DropAction.MoveAction)
+                return True
+            if kind == QEvent.Type.MouseButtonRelease:
+                self.metric_hold_timer.stop()
+                if not self.metric_dragged and not self.metric_held: self.select_dashboard_tile('metric:'+key)
+                self.metric_press_key=None; return True
+            if kind == QEvent.Type.DragEnter and event.mimeData().hasFormat(TILE_MIME): event.acceptProposedAction(); return True
+            if kind == QEvent.Type.Drop:
+                source=bytes(event.mimeData().data(TILE_MIME)).decode(errors='replace')
+                if self.reorder_dashboard_tile(source,'metric:'+key): event.acceptProposedAction()
+                return True
+        return super().eventFilter(watched,event)
+
+    def open_metric_context(self):
+        if self.metric_press_key:
+            self.metric_held=True; self.open_tile_edit_menu('metric:'+self.metric_press_key)
+
+    def open_fps_menu(self):
+        if self.dashboard_editing:
+            self.open_tile_edit_menu('fps'); return
+        popup=EmbeddedPopup(self); box=QVBoxLayout(popup); box.addWidget(QLabel('FPS limit'))
+        for value,title,icon in self.fps_mode.options:
+            button=self.button(title,lambda checked=False,v=value:self.set_fps_limit(v),True); button.setChecked(value == self.prefs['fps_limit']); button.setEnabled(self.prefs.get('mangohud_mode') == 'takeover'); button.clicked.connect(popup.hide); box.addWidget(button)
+        popup.setFixedSize(260,280); self.fps_popup=popup; popup.show()
+
+    def dashboard_edit_tap(self):
+        if not self.dashboard_editing: self.open_dashboard_editor()
+
+    def make_editor_toolbar(self):
+        toolbar=QWidget(); layout=QVBoxLayout(toolbar); layout.setContentsMargins(0,0,0,0); layout.setSpacing(6)
+        help_text=QLabel('Tap two tiles to swap, or drag to reorder. All tiles can be removed.'); help_text.setObjectName('Notice'); help_text.setWordWrap(True)
+        layout.addWidget(help_text,1)
+        layout.addWidget(QLabel('Hold a tile to edit it.'))
+        self.editor_header_actions=[]
+        for title,icon,callback in [('Add tile','plus',self.open_add_menu),('Cancel','corner-up-left',self.cancel_dashboard_layout),('Done','check',self.save_dashboard_layout)]:
+            button=self.button(title,callback,title == 'Show metrics')
+            label=button.text(); button.setAccessibleName(label); button.setToolTip(label); button.setText(''); button.setIcon(control_icon(icon))
+            button.setFixedSize(44,44); button.setStyleSheet('padding:0; min-height:0; border-radius:10px; font-size:12px;'); self.header.insertWidget(self.header.count()-1,button)
+            self.editor_header_actions.append(button); button.hide()
+        self.editor_add=self.editor_header_actions[0]
+        self.dashboard_info.addWidget(toolbar)
+
+    def open_tile_edit_menu(self,key):
+        if not self.dashboard_editing: return
+        metric=key.startswith('metric:'); identity=key.split(':',1)[1] if metric else key
+        if key != 'fps' and identity not in (self.dashboard_draft.get('metric_order',[]) if metric else self.dashboard_draft['tiles']): return
+        if hasattr(self,'tile_edit_popup'): self.tile_edit_popup.hide(); self.tile_edit_popup.deleteLater()
+        titles=METRIC_TITLES
+        popup=EmbeddedPopup(self); box=QVBoxLayout(popup); box.addWidget(QLabel(titles.get(identity,'FPS') if metric or key == 'fps' else DASHBOARD_TILES[key][0]))
+        row=QHBoxLayout(); box.addLayout(row)
+        delete=lambda:self.set_dashboard_metric(identity,False) if metric else self.set_dashboard_display('show_fps',False) if key == 'fps' else self.toggle_dashboard_tile(key)
+        add=self.show_available_metrics if metric or key == 'fps' else self.show_available_tiles
+        for title,icon,callback in [('Add tile','plus',add),('Remove tile','trash',delete)]:
+            button=self.button('',lambda checked=False,action=callback:action()); button.setIcon(control_icon(icon)); button.setAccessibleName(tr(title)); button.setToolTip(tr(title)); button.setFixedSize(44,44); button.clicked.connect(popup.hide); row.addWidget(button)
+        if metric and identity in ('cpu','gpu'):
+            units=QHBoxLayout(); box.addLayout(units)
+            mode=self.dashboard_draft.get('metric_modes',{}).get(identity,self.dashboard_draft.get('metric_mode','mhz'))
+            for value,title in [('percent','%'),('mhz','MHz')]:
+                button=self.button(title,lambda checked=False,v=value,k=identity:self.set_metric_unit(k,v),True); button.setChecked(mode == value); button.clicked.connect(popup.hide); units.addWidget(button)
+        if metric and identity in ('network','disk_io'):
+            source=self.dashboard_draft.get('metric_sources',{}).get(identity,'all')
+            button=self.button(('Interface' if identity == 'network' else 'Disk')+' · '+source,lambda checked=False,k=identity:self.choose_metric_source(k)); button.clicked.connect(popup.hide); box.addWidget(button)
+        if metric and identity == 'load': box.addWidget(QLabel('1 min · 5 min · 15 min'))
+        popup.setFixedSize(260,170 if metric and identity in ('cpu','gpu','network','disk_io','load') else 110); self.tile_edit_popup=popup; popup.show()
+
+    def choose_metric_source(self,key):
+        self.call('MonitoringDevices',[key],lambda raw:self.show_metric_sources(key,json.loads(raw)),quiet=True)
+
+    def show_metric_sources(self,key,names):
+        popup=EmbeddedPopup(self); box=QVBoxLayout(popup); area=QScrollArea(); area.setWidgetResizable(True); content=QWidget(); choices=QVBoxLayout(content)
+        selected=self.dashboard_draft.get('metric_sources',{}).get(key,'all')
+        for name in ['all']+sorted(name for name in names if name != 'all'):
+            button=self.button(name,lambda checked=False,n=name,k=key:self.set_metric_source(k,n),True); button.setChecked(name == selected); button.clicked.connect(popup.hide); choices.addWidget(button)
+        area.setWidget(content); box.addWidget(area); popup.setFixedSize(300,320); self.metric_source_popup=popup; popup.show()
+
+    def set_metric_source(self,key,value):
+        self.dashboard_draft.setdefault('metric_sources',{})[key]=value; self.refresh_dashboard_editor()
+
+    def set_metric_unit(self,key,value):
+        self.dashboard_draft.setdefault('metric_modes',{})[key]=value; self.refresh_dashboard_editor()
+
+    def open_add_menu(self):
+        popup=EmbeddedPopup(self); row=QHBoxLayout(popup)
+        for title,icon,callback in [('Add control','plus',self.show_available_tiles),('Add metric','activity',self.show_available_metrics)]:
+            button=self.button(title,callback); button.setIcon(control_icon(icon)); button.clicked.connect(popup.hide); row.addWidget(button)
+        popup.setFixedSize(360,80); self.add_kind_popup=popup; popup.show()
+
+    def show_available_metrics(self):
+        titles=dict(METRIC_TITLES); icons=dict(METRIC_ICONS)
+        order=self.dashboard_draft.get('metric_order',[]); available=[key for key in titles if key not in order]
+        if not self.dashboard_draft.get('show_fps',True): available.append('fps'); titles['fps']='FPS'; icons['fps']='gauge'
+        if not available: return
+        popup=EmbeddedPopup(self); grid=QGridLayout(popup); columns=min(2,len(available))
+        for index,key in enumerate(available):
+            action=lambda checked=False,k=key:self.set_dashboard_display('show_fps',True) if k == 'fps' else self.set_dashboard_metric(k,True)
+            reading=self.fps.text() if key == 'fps' else self.gauges[{'temperature':'temp','memory':'ram'}.get(key,key)][0].text()
+            button=self.button(reading,action); button.setIcon(control_icon(icons[key])); button.setFixedSize(180,44); button.setStyleSheet('border:0; border-radius:12px; padding:8px; text-align:left; background:'+theme_color('#303144').name()+';'); button.clicked.connect(popup.hide); grid.addWidget(button,index//columns,index%columns)
+            button.setEnabled(key == 'fps' or len(order)<6)
+            if key != 'fps' and len(order)>=6: button.setToolTip(tr('Remove a metric before adding another.'))
+        popup.setFixedSize(columns*180+24+(columns-1)*6,math.ceil(len(available)/columns)*50+24); self.metric_add_popup=popup; popup.show()
+
+    def set_dashboard_display(self,key,value):
+        self.dashboard_draft[key]=value; self.refresh_dashboard_editor()
+
+    def set_dashboard_metric(self,key,value):
+        order=self.dashboard_draft.setdefault('metric_order',['cpu','gpu','temperature','fan','memory','battery'])
+        if value and key not in order and len(order)<6: order.append(key)
+        elif not value and key in order: order.remove(key)
+        self.dashboard_draft['metrics']=True; self.editor_selection=None
+        self.refresh_dashboard_editor()
+
+    def make_dashboard_editor(self,layout):
+        help_text=QLabel('Edit all tiles directly on the dashboard.'); help_text.setWordWrap(True); layout.addWidget(help_text)
+        layout.addWidget(self.button('Customize dashboard',self.open_dashboard_editor)); layout.addStretch(1)
+
+    def refresh_dashboard_editor(self):
+        if not hasattr(self,'editor_selected_tiles'): return
+        self.apply_dashboard_layout()
+
+    def select_dashboard_tile(self,key):
+        metric=key.startswith('metric:'); identity=key.split(':',1)[1] if metric else key
+        tiles=self.dashboard_draft.get('metric_order',[]) if metric else self.dashboard_draft['tiles']
+        if identity not in tiles: return
+        if self.editor_selection is None: self.editor_selection=key
+        elif self.editor_selection == key: self.editor_selection=None
+        elif self.editor_selection.startswith('metric:') != metric: self.editor_selection=key
+        else:
+            source=tiles.index(self.editor_selection.split(':',1)[1] if metric else self.editor_selection); target=tiles.index(identity)
+            tiles[source],tiles[target]=tiles[target],tiles[source]; self.editor_selection=None
+        self.refresh_dashboard_editor()
+
+    def remove_selected_tile(self):
+        if self.editor_selection: self.toggle_dashboard_tile(self.editor_selection)
+
+    def show_available_tiles(self):
+        available=[key for key in DASHBOARD_TILES if key not in self.dashboard_draft['tiles']]
+        if not available: return
+        if hasattr(self,'dashboard_add_dialog'): self.dashboard_add_dialog.close(); self.dashboard_add_dialog.deleteLater()
+        dialog=EmbeddedPopup(self); dialog.setWindowTitle(tr('Add tile')); box=QVBoxLayout(dialog); box.addWidget(QLabel('Add tiles'))
+        grid=QGridLayout(); grid.setSpacing(8); box.addLayout(grid)
+        columns=min(4,len(available)); rows=math.ceil(len(available)/columns); size=self.editor_selected_tiles[2].size()
+        card_width=max(90,min(size.width(),(self.width()-48)//4)); card_height=max(80,min(size.height(),(self.height()-120)//rows))
+        for index,key in enumerate(available):
+            tile=EditTile(self,False); tile.set_tile(key); grid.addWidget(tile,index//columns,index%columns); tile.setFixedSize(card_width,card_height)
+        box.addWidget(self.button('Cancel',dialog.reject)); dialog.setFixedSize(columns*card_width+(columns-1)*8+24,min(self.height()-24,rows*card_height+80)); dialog.move(self.mapToGlobal(self.rect().center())-dialog.rect().center())
+        self.dashboard_add_dialog=dialog; dialog.show(); dialog.raise_(); dialog.activateWindow()
+
+    def toggle_dashboard_tile(self,key):
+        if key not in DASHBOARD_TILES: return
+        tiles=self.dashboard_draft['tiles']
+        if key in tiles: tiles.remove(key)
+        elif len(tiles)<12: tiles.append(key)
+        self.editor_selection=None
+        if hasattr(self,'dashboard_add_dialog'): self.dashboard_add_dialog.accept()
+        self.refresh_dashboard_editor()
+
+    def reorder_dashboard_tile(self,source,target):
+        metric=source.startswith('metric:')
+        if target is not None and metric != target.startswith('metric:'): return False
+        if metric:
+            source=source.split(':',1)[1]; target=target.split(':',1)[1] if target is not None else None
+        tiles=self.dashboard_draft.get('metric_order',[]) if metric else self.dashboard_draft['tiles']
+        if source not in tiles or source == target: return False
+        if target is not None and target not in tiles: return False
+        index=tiles.index(target) if target is not None else len(tiles)-1
+        tiles.remove(source); tiles.insert(index,source); self.editor_selection=None; self.refresh_dashboard_editor(); return True
+
+    def toggle_dashboard_metrics(self,checked): self.dashboard_draft['metrics']=checked
+
+    def reset_dashboard_draft(self):
+        self.dashboard_draft=dashboard_preset(); self.editor_selection=None; self.refresh_dashboard_editor()
+
+    def save_dashboard_layout(self):
+        self.set_pref('dashboard_layout',dashboard_layout(self.dashboard_draft)); self.leave_dashboard_editor()
+
+    def cancel_dashboard_layout(self):
+        self.dashboard_draft = dashboard_layout(self.prefs.get('dashboard_layout')); self.refresh_dashboard_editor(); self.leave_dashboard_editor()
+
+    def leave_dashboard_editor(self):
+        self.dashboard_editing=False; self.editor_selection=None; self.header_title.setText('HandheldDash'); self.apply_dashboard_layout()
+        if hasattr(self,'dashboard_add_dialog'): self.dashboard_add_dialog.hide()
+        self.open_tab(0)
+        if hasattr(self,'settings_stack'):
+            self.settings_stack.setCurrentIndex(0); self.change_group(0)
+        visible=self.isVisible(); self.setWindowTitle('HandheldDash')
+        self.setWindowFlag(Qt.WindowType.WindowDoesNotAcceptFocus,True)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating,True)
+        if visible: self.showFullScreen(); self.raise_()
 
     def make_tasks(self):
         self.tasks_index = self.tabs.count()
-        layout = self.page('工作')
+        layout = self.page('Tasks')
         self.task_page = 0; self.task_records = []; self.selected_task = None
         self.task_buttons = []
         grid = QGridLayout(); layout.addLayout(grid)
@@ -948,49 +1675,68 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
             button.held.connect(lambda index=i:self.task_menu(index))
             button.setMinimumHeight(62); button.setIconSize(QSize(ICON_SIZE,ICON_SIZE)); grid.addWidget(button,i//2,i%2); self.task_buttons.append(button)
         row = QHBoxLayout()
-        row.addWidget(self.button('上一頁',lambda:self.change_task_page(-1)))
+        row.addWidget(self.button('Previous',lambda:self.change_task_page(-1)))
         self.task_count = QLabel('0 / 0'); self.task_count.setAlignment(Qt.AlignmentFlag.AlignCenter); row.addWidget(self.task_count,1)
-        row.addWidget(self.button('下一頁',lambda:self.change_task_page(1))); layout.addLayout(row)
-        row = QHBoxLayout(); row.addWidget(self.button('重新整理',self.refresh_tasks));  layout.addLayout(row)
+        row.addWidget(self.button('Next',lambda:self.change_task_page(1))); layout.addLayout(row)
+        row = QHBoxLayout(); row.addWidget(self.button('Refresh',self.refresh_tasks));  layout.addLayout(row)
         layout.addStretch()
         self.tabs.currentChanged.connect(lambda i:self.refresh_tasks() if i==self.tasks_index else None)
 
     def make_screen(self):
-        layout = self.page('屏幕控制'); self.screen_sliders = {}
+        self.screen_sliders = {}
+        self.adjustment_dialogs={}; self.brightness_buttons={}
+        brightness_dialog,brightness_layout=self.adjustment_dialog('brightness','Brightness')
+        volume_dialog,volume_layout=self.adjustment_dialog('volume','Volume')
+        layout=brightness_layout
         row=QHBoxLayout(); self.screen_display_buttons={}
-        for name,title in [('DSI-2','上屏顯示'),('DSI-1','下屏顯示')]:
-            button=StateButton(title,[(True,title,'monitor'),(False,title.replace('顯示','遮黑'),'eye-off')],lambda value,n=name:self.set_screen_display(n,value))
+        for name,title in [('DSI-2','Top screen visible'),('DSI-1','Bottom screen visible')]:
+            button=StateButton(title,[(True,title,'monitor'),(False,title.replace('visible','blanked'),'monitor-off')],lambda value,n=name:self.set_screen_display(n,value))
             button.show_value(True); self.screen_display_buttons[name]=button; row.addWidget(button,1)
         layout.addLayout(row)
-        card = QWidget(); card.setObjectName('Gauge'); box = QVBoxLayout(card)
-        for key,title in [('both','雙屏'),('top','主屏'),('bottom','副屏')]:
+        brightness_row=QHBoxLayout()
+        for key,title in [('both','Both'),('top','Top'),('bottom','Bottom')]:
             row=QHBoxLayout(); icon=QLabel(); icon.setPixmap(control_icon('sun').pixmap(ICON_SIZE,ICON_SIZE)); row.addWidget(icon)
             label=QLabel(title); label.setFixedWidth(46); row.addWidget(label)
             slider=TouchSlider(Qt.Orientation.Horizontal); slider.setRange(1,100); row.addWidget(slider,1)
             value=QLabel('—%'); value.setFixedWidth(46); row.addWidget(value)
-            slider.valueChanged.connect(lambda n,l=value:l.setText(f'{n}%'))
+            button=self.button(title+' · —%',lambda checked=False:self.open_adjustment('brightness')); button.setIcon(control_icon('sun'))
+            brightness_row.addWidget(button,1); self.brightness_buttons[key]=button
+            slider.valueChanged.connect(lambda n,l=value,b=button,t=title:(l.setText(f'{n}%'),b.setText(t+f' · {n}%')))
             slider.edited.connect(lambda n,k=key:self.screen_brightness(k,n))
-            box.addLayout(row); self.screen_sliders[key]=slider
-        layout.addWidget(card)
+            brightness_layout.insertLayout(brightness_layout.count()-1,row); self.screen_sliders[key]=slider
         card=QWidget(); card.setObjectName('Gauge'); row=QHBoxLayout(card)
         self.audio_muted=False
         self.volume_icon=self.button('',self.toggle_audio_mute); self.volume_icon.setIconSize(QSize(ICON_SIZE,ICON_SIZE)); self.volume_icon.setFixedWidth(44)
-        self.volume_icon.setAccessibleName(tr('音量')); row.addWidget(self.volume_icon)
+        self.volume_icon.setStyleSheet('border:0; background:transparent; padding:0; min-height:44px;')
+        self.volume_icon.setAccessibleName(tr('Volume')); row.addWidget(self.volume_icon)
+        self.volume_button=self.button('Volume · —%',lambda:self.open_adjustment('volume')); self.volume_button.hide()
         self.volume=TouchSlider(Qt.Orientation.Horizontal); self.volume.setRange(0,100); row.addWidget(self.volume,1)
-        self.volume_label=QLabel('—%'); self.volume_label.setFixedWidth(46); row.addWidget(self.volume_label)
+        self.volume_label=QLabel('—%'); row.addWidget(self.volume_label)
         self.volume.edited.connect(lambda n:self.set_audio('set-volume',f'{n}%'))
-        self.volume.valueChanged.connect(lambda n:self.update_volume_icon()); layout.addWidget(card)
+        self.volume.valueChanged.connect(lambda n:self.update_volume_icon()); volume_layout.insertWidget(1,card)
         row=QHBoxLayout()
-        move=self.button('移動目前應用',lambda:self.action('swap')); move.setIcon(control_icon('arrow-left-right')); row.addWidget(move,1)
-        self.launch_screen=StateButton('新應用預設屏幕',[('','跟隨桌面','panels-top-left'),('DSI-2','新應用：上屏','monitor'),('DSI-1','新應用：下屏','monitor')],self.set_launch_screen)
+        self.launch_screen=StateButton('New application screen',[('','Desktop default','panels-top-left'),('DSI-2','New apps: top','monitor'),('DSI-1','New apps: bottom','monitor')],self.set_launch_screen)
         self.launch_screen.show_value(self.prefs.get('launch_screen','')); row.addWidget(self.launch_screen,1); layout.addLayout(row)
-        layout.addStretch()
+        done=layout.takeAt(1).widget(); layout.addWidget(done)
+
+    def adjustment_dialog(self,key,title):
+        dialog=EmbeddedPopup(self); dialog.setWindowTitle(tr(title)); dialog.setMinimumWidth(340)
+        box=QVBoxLayout(dialog); heading=QLabel(title); heading.setObjectName('Title'); box.addWidget(heading)
+        box.addWidget(self.button('Done',dialog.accept)); self.adjustment_dialogs[key]=dialog
+        return dialog,box
+
+    def open_adjustment(self,key):
+        dialog=self.adjustment_dialogs.get(key)
+        if dialog:
+            dialog.setFixedSize(min(420,self.width()-24),min(self.height()-24,dialog.sizeHint().height()))
+            dialog.move(self.mapToGlobal(self.rect().center())-dialog.rect().center()); dialog.show(); dialog.raise_()
 
     def update_volume_icon(self):
         value=self.volume.value()
         icon='volume-x' if self.audio_muted or value == 0 else 'volume' if value < 20 else 'volume-1' if value < 60 else 'volume-2'
         self.volume_icon.setIcon(control_icon(icon)); self.volume_label.setText(f'{value}%')
-        self.volume_icon.setToolTip(tr('取消靜音' if self.audio_muted else '靜音'))
+        self.volume_button.setText(tr('Muted') if self.audio_muted else tr('Volume')+f' · {value}%')
+        self.volume_icon.setToolTip(tr('Unmute' if self.audio_muted else 'Mute'))
 
     def toggle_audio_mute(self):
         self.audio_muted=not self.audio_muted
@@ -1014,7 +1760,7 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
             return
         screen=next((s for s in QApplication.screens() if s.name()==name),None)
         if not screen:
-            self.screen_display_buttons[name].show_value(True); self.notify('找不到截圖屏幕'); return
+            self.screen_display_buttons[name].show_value(True); self.notify('Capture screen is unavailable'); return
         if name not in self.screen_blanks:
             blank=QWidget(None,Qt.WindowType.Tool|Qt.WindowType.FramelessWindowHint|Qt.WindowType.WindowStaysOnTopHint|Qt.WindowType.WindowDoesNotAcceptFocus)
             blank.setWindowTitle('HandheldDash Blank '+name)
@@ -1058,7 +1804,7 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
         self.audio_active = True; process = QProcess(self)
         def done(code=1,*args):
             self.audio_active = False
-            if code: self.notify('錯誤：'+bytes(process.readAllStandardError()).decode())
+            if code: self.notify('Error: '+bytes(process.readAllStandardError()).decode())
             process.deleteLater(); self.flush_audio()
         process.finished.connect(done)
         process.errorOccurred.connect(lambda error:done() if error == QProcess.ProcessError.FailedToStart else None)
@@ -1072,7 +1818,7 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
 
     @staticmethod
     def fan_link_choices():
-        return [(True,'隨效能','fan'),(False,'獨立調節','sliders-horizontal')]
+        return [(True,'Default','fan'),(False,'Manual','fan')]
 
     def set_fan_follow(self,value):
         self.fan_edit_timer.stop(); self.write_queue.pop('fan-curve',None); self.fan_dirty=False
@@ -1085,19 +1831,19 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
         self.set('fan-follow-performance',['on' if value else 'off'])
 
     def make_fan(self):
-        layout=self.page('風扇管理'); self.fan_dirty=False; self.fan_loading=False
+        layout=self.page('Fan'); self.fan_dirty=False; self.fan_loading=False
         self.fan_performance=QLabel('—'); layout.addWidget(self.fan_performance)
         row=QHBoxLayout()
         self.fan_profile=QLabel('—')
-        self.fan_sensor=StateButton('風扇感測',[('max','最熱感測器','thermometer'),('average','平均感測器','activity')],lambda v:self.set('fan-sensor-mode',[v]))
-        self.fan_follow=StateButton('風扇聯動',self.fan_link_choices(),self.set_fan_follow)
+        self.fan_sensor=StateButton('Fan sensor',[('max','Hottest sensor','thermometer'),('average','Average sensors','activity')],lambda v:self.set('fan-sensor-mode',[v]))
+        self.fan_follow=StateButton('Fan linkage',self.fan_link_choices(),self.set_fan_follow)
         row.addWidget(self.fan_follow,1)
         row.addWidget(self.fan_profile,1); row.addWidget(self.fan_sensor,1); layout.addLayout(row)
         self.fan_graph=FanCurve(); self.fan_graph.pointChanged.connect(self.edit_fan_point); layout.addWidget(self.fan_graph,1)
         self.fan_reading=QLabel('—'); layout.addWidget(self.fan_reading)
         self.fan_edit_timer=QTimer(self); self.fan_edit_timer.setSingleShot(True); self.fan_edit_timer.setInterval(120); self.fan_edit_timer.timeout.connect(self.apply_fan_curve)
-        self.fan_dialog=QDialog(self); self.fan_dialog.setWindowTitle(tr('進階數值面板')); dialog_layout=QVBoxLayout(self.fan_dialog)
-        advanced=self.button('進階數值面板',self.fan_dialog.show); layout.addWidget(advanced)
+        self.fan_dialog=QDialog(self); self.fan_dialog.setWindowTitle(tr('Advanced values')); dialog_layout=QVBoxLayout(self.fan_dialog)
+        advanced=self.button('Advanced values',self.fan_dialog.show); layout.addWidget(advanced)
         scroll=QScrollArea(); scroll.setWidgetResizable(True); scroll.setMinimumHeight(250)
         editor=QWidget(); grid=QGridLayout(editor); grid.setContentsMargins(8,4,8,4)
         self.fan_points=[]
@@ -1109,7 +1855,7 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
             speed.valueChanged.connect(self.edit_fan_curve); temp.valueChanged.connect(self.edit_fan_curve)
             grid.addWidget(temp,i,0); grid.addWidget(speed,i,1); grid.addWidget(value,i,2)
             self.fan_points.append((temp,speed))
-        scroll.setWidget(editor); dialog_layout.addWidget(scroll); dialog_layout.addWidget(self.button('關閉',self.fan_dialog.close)); self.fan_dialog.resize(510,370)
+        scroll.setWidget(editor); dialog_layout.addWidget(scroll); dialog_layout.addWidget(self.button('Close',self.fan_dialog.close)); self.fan_dialog.resize(510,370)
 
     def load_fan_curve(self,curve,editable=False):
         self.fan_loading=True
@@ -1146,12 +1892,12 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
         if not curve: return
         temps=curve['temperatures']; speeds=curve['pwm']
         if any(a>=b for a,b in zip(temps,temps[1:])) or any(a>b for a,b in zip(speeds,speeds[1:])) or speeds[-1]!=255:
-            self.notify('溫度須遞增，轉速不可遞減，最後一點須為 100%'); return
+            self.notify('Temperatures must rise, speeds must not fall, final speed must be 100%'); return
         self.set('fan-curve',list(map(str,temps+speeds)))
 
     def update_fan(self):
         performance=self.state.get('performance','standard')
-        self.fan_performance.setText(tr({'quiet':'安靜','standard':'標準','performance':'高效能','custom':'自訂'}.get(performance,performance)))
+        self.fan_performance.setText(tr({'quiet':'Quiet','standard':'Balanced','performance':'Performance','custom':'Custom'}.get(performance,performance)))
         self.fan_follow.show_value(self.state.get('fan_follow_performance',True))
         control=self.state.get('fan_control',{})
         self.fan_graph.temperature=control.get('temperature',0)/1000
@@ -1159,27 +1905,28 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
         if self.fan_dirty or self.write_queue or self.fan_graph.dragging: return
         profile=self.state.get('fan_profile','moderate')
         if profile=='auto': profile='moderate'
-        self.fan_profile.setText(tr({'quiet':'安靜','moderate':'標準','aggressive':'強散熱','custom':'自訂'}.get(profile,profile))); self.fan_sensor.show_value(self.state.get('fan_sensor_mode','max'))
+        self.fan_profile.setText(tr({'quiet':'Quiet','moderate':'Balanced','aggressive':'Active cooling','custom':'Custom'}.get(profile,profile))); self.fan_sensor.show_value(self.state.get('fan_sensor_mode','max'))
         curve=control.get('curves',{}).get(profile)
         if curve: self.load_fan_curve(curve,profile=='custom')
         self.fan_reading.setText(f"{self.fan_graph.temperature:.1f} °C · {self.state.get('fan_rpm') or 0:.0f} RPM · PWM {self.state.get('fan_percent') or 0:.0f}%")
 
     @staticmethod
     def lighting_choices():
-        return [('off','燈光關閉','lightbulb-off'),('battery','電量燈光','battery'),('static','固定燈光','palette'),('audio','音頻律動','volume-2')]
+        return [('off','Lights off','lightbulb-off'),('battery','Battery lights','battery'),('static','Static lights','palette'),('audio','Audio reactive','volume-2')]
 
     def make_lighting(self):
         self.lighting_index = self.tabs.count()
-        layout = self.page('燈光管理')
-        self.lighting_mode = StateButton('氛圍燈',self.lighting_choices(),self.set_rgb_mode); layout.addWidget(self.lighting_mode)
+        layout = self.page('Lighting')
+        self.lighting_mode = StateButton('Lighting',self.lighting_choices(),self.set_rgb_mode); layout.addWidget(self.lighting_mode)
         form = QFormLayout(); layout.addLayout(form)
         self.lighting_brightness = TouchSlider(Qt.Orientation.Horizontal); self.lighting_brightness.setRange(0,255)
         self.lighting_brightness.edited.connect(lambda n:self.set('rgb-brightness',[str(n)]))
-        form.addRow(QLabel('氛圍燈亮度'),self.lighting_brightness)
+        dialog,box=self.adjustment_dialog('lighting','Lighting brightness'); box.insertWidget(1,self.lighting_brightness)
+        form.addRow(QLabel('Lighting brightness'),self.button('Adjust',lambda:self.open_adjustment('lighting')))
         self.lighting_basic_form = form
         self.lighting_pads = []
         rings = QHBoxLayout(); layout.addLayout(rings)
-        for side,title,default in [('left','左搖杆燈','#0080ff'),('right','右搖杆燈','#c050ff')]:
+        for side,title,default in [('left','Left stick light','#0080ff'),('right','Right stick light','#c050ff')]:
             column = QVBoxLayout(); rings.addLayout(column,1)
             label = QLabel(title); label.setAlignment(Qt.AlignmentFlag.AlignCenter); column.addWidget(label)
             self.prefs.setdefault('lighting_'+side,default)
@@ -1189,7 +1936,7 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
             pad.colorChosen.connect(lambda color,k=side:self.set_ring_color(k,color))
             pad.detent.connect(lambda:self.call('Feedback',[],quiet=True))
             column.addWidget(pad); self.lighting_pads.append(pad)
-        label = QLabel('X：最低／最高亮度；Y：響應靈敏度。'); label.setWordWrap(True); layout.addWidget(label)
+        label = QLabel('X: minimum/maximum brightness; Y: sensitivity.'); label.setWordWrap(True); layout.addWidget(label)
         self.lighting_status = QLabel('—'); self.lighting_status.setWordWrap(True)
         layout.addStretch()
         self.capture = None; self.capture_buffer = b''; self.capture_source = None
@@ -1222,7 +1969,7 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
                 rgb=self.state.get('lighting_output',{}).get(side,[0,0,0]); peak=max(rgb)
                 color=QColor.fromRgb(*[round(v*255/peak) if peak else 0 for v in rgb])
                 if not pad.color_open: pad.set_output(color,peak/255)
-            self.lighting_status.setText(tr('音頻律動未啟用')); return
+            self.lighting_status.setText(tr('Audio reactive lighting is off')); return
         if self.monitor_query or time.monotonic()-getattr(self,'monitor_query_time',0) < 10: return
         self.monitor_query_time = time.monotonic()
         self.monitor_query = True
@@ -1232,7 +1979,7 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
             source = bytes(query.readAllStandardOutput()).decode().strip()+'.monitor'
             query.deleteLater()
             if code or source == '.monitor':
-                self.lighting_status.setText(tr('無法讀取播放音頻')); return
+                self.lighting_status.setText(tr('Cannot capture playback audio')); return
             if (self.state.get('lighting_mode') or self.state.get('rgb_mode')) != 'audio' or self.write_queue or self.write_active: return
             if self.capture and source == self.capture_source: return
             self.stop_lighting(); self.capture_source = source
@@ -1246,12 +1993,12 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
             def ended(code=1,*args):
                 if self.capture is process:
                     self.capture = None; self.capture_source = None; self.capture_buffer = b''
-                    self.lighting_status.setText(tr('無法讀取播放音頻')+' · '+bytes(process.readAllStandardError()).decode(errors='replace'))
+                    self.lighting_status.setText(tr('Cannot capture playback audio')+' · '+bytes(process.readAllStandardError()).decode(errors='replace'))
                     process.deleteLater()
             process.readyReadStandardOutput.connect(read_audio); process.finished.connect(ended)
             process.errorOccurred.connect(lambda e:ended() if e==QProcess.ProcessError.FailedToStart else None)
-            process.start('parec',['--device='+source,'--raw','--format=float32le','--rate=8000','--channels=2','--channel-map=front-left,front-right','--latency-msec=50','--client-name=AYN Thor Lighting'])
-            self.lighting_status.setText(tr('內錄來源')+' · '+tr('耳機' if 'headphone' in source.lower() else '揚聲器'))
+            process.start('parec',['--device='+source,'--raw','--format=float32le','--rate=8000','--channels=2','--channel-map=front-left,front-right','--latency-msec=50','--client-name=HandheldDash Lighting'])
+            self.lighting_status.setText(tr('Playback source')+' · '+tr('Headphones' if 'headphone' in source.lower() else 'Speakers'))
             self.lighting_status.setToolTip(source); self.lighting_levels = [0.,0.]; self.lighting_targets = [0.,0.]; self.lighting_reference = .01; self.lighting_last_audio = self.lighting_last_tick = time.monotonic(); self.lighting_timer.start()
         query.finished.connect(done)
         query.errorOccurred.connect(lambda e:done() if e==QProcess.ProcessError.FailedToStart else None)
@@ -1305,73 +2052,149 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
 
     def make_settings(self):
         self.settings_index=self.tabs.count()
-        layout = self.page('設定')
+        layout = self.page('Settings')
         self.settings_stack = QStackedWidget(); layout.addWidget(self.settings_stack)
         self.setting_widgets = {}; self.sliders = self.screen_sliders.copy(); self.group_names = []
-        def group(title):
+        def group(title,scrollable=False):
             self.group_names.append(title)
-            page = QWidget(); box = QVBoxLayout(page); form = QFormLayout(); form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow); form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows); box.addLayout(form); box.addStretch()
+            page = QWidget(); box = QVBoxLayout(page)
+            if scrollable:
+                scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+                content = QWidget(); scroll.setWidget(content); box.addWidget(scroll); box = QVBoxLayout(content)
+                scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            form = QFormLayout(); form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow); form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows); box.addLayout(form); box.addStretch()
             self.settings_stack.addWidget(page)
             return form
-        form = group('TAB 管理')
-        help_text = QLabel('選擇常駐頁面；其他頁面可從此處開啟，離開後自動收起。設定頁始終保留。'); help_text.setWordWrap(True); form.addRow(help_text)
+        form = group('Tab management')
+        help_text = QLabel('Pin your tabs. Open other pages here; they close when you leave. Settings always remains available.'); help_text.setWordWrap(True); form.addRow(help_text)
         list_widget = QWidget(); list_layout = QVBoxLayout(list_widget)
         for i,title in enumerate(self.page_titles[:-1]):
             row = QHBoxLayout(); row.addWidget(QLabel(title),1)
-            pin = self.button('常駐',lambda checked,t=title:self.pin_tab(t,checked),True)
+            pin = self.button('Pinned',lambda checked,t=title:self.pin_tab(t,checked),True)
             pin.setChecked(title in self.prefs.get('resident_tabs',self.page_titles))
-            row.addWidget(pin); row.addWidget(self.button('開啟',lambda checked=False,index=i:self.open_tab(index)))
+            row.addWidget(pin); row.addWidget(self.button('Open',lambda checked=False,index=i:self.open_tab(index)))
             list_layout.addLayout(row)
-        scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setWidget(list_widget); form.addRow(scroll)
-        form = group('效能')
-        self.mango_mode=StateButton('MangoHud',[('release','配置釋放','sliders-horizontal'),('takeover','配置接管','gauge')],lambda value:self.set_mangohud_mode(value))
+        list_layout.setContentsMargins(0,0,0,0)
+        for button in list_widget.findChildren(QPushButton): button.setStyleSheet('padding:4px 8px; min-height:24px;')
+        form.addRow(list_widget)
+        self.dashboard_settings_index = self.settings_stack.count()
+        self.group_names.append('Customize dashboard')
+        editor = QWidget(); editor_layout = QVBoxLayout(editor); self.settings_stack.addWidget(editor)
+        self.make_dashboard_editor(editor_layout)
+        form = group('Performance')
+        self.mango_mode=StateButton('MangoHud',[('release','Release configuration','sliders-horizontal'),('takeover','Take over configuration','gauge')],lambda value:self.set_mangohud_mode(value))
         form.addRow(QLabel('MangoHud'),self.mango_mode)
-        self.panel_affinity = StateButton('中控 CPU', [('system','跟隨系統','sliders-horizontal'),('little','僅小核','leaf')],self.set_cpu_affinity)
+        self.panel_affinity = StateButton('Panel CPU', [('system','System language','sliders-horizontal'),('little','Little cores only','leaf')],self.set_cpu_affinity)
         self.panel_affinity.show_value(self.prefs['panel_cpu_affinity'])
-        self.panel_affinity.setToolTip(tr('僅限制中控應用；外部啟動的應用不受限制。')+' CPU '+','.join(map(str,sorted(self.little_cpus))))
-        form.addRow(QLabel('中控 CPU'),self.panel_affinity)
+        self.panel_affinity.setToolTip(tr('Limits only the panel; externally launched apps are unrestricted.')+' CPU '+','.join(map(str,sorted(self.little_cpus))))
+        form.addRow(QLabel('Panel CPU'),self.panel_affinity)
         row=QHBoxLayout()
         cpu=StateButton('CPU governor',[(v,v,'zap' if v=='performance' else 'leaf' if v=='powersave' else 'sliders-horizontal') for v in ['performance','schedutil','ondemand','powersave','auto']],lambda v:self.set('cpu-governor',[v]))
         self.setting_widgets['cpu_governor']=cpu; row.addWidget(cpu,1)
-        self.boost=StateButton('CPU boost',[(False,'Boost 關閉','sliders-horizontal'),(True,'Boost 開啟','zap')],lambda v:self.set('cpu-boost',['on' if v else 'off'])); row.addWidget(self.boost,1)
+        self.boost=StateButton('CPU boost',[(False,'Boost off','sliders-horizontal'),(True,'Boost on','zap')],lambda v:self.set('cpu-boost',['on' if v else 'off'])); row.addWidget(self.boost,1)
         form.addRow(QLabel('CPU governor'),row)
         self.combo(form,'GPU governor',['performance','simple_ondemand','powersave','userspace','auto'],'gpu-governor','gpu_governor')
-        self.combo(form,'排程器',['regular','lavd'],'scheduler','scheduler')
-        self.ufs_irq=StateButton('UFS 中斷位置',[('system','恢復原配置','sliders-horizontal'),('powersave','省電 CPU0–2','leaf'),('performance','高性能 CPU7','zap')],lambda value:self.set('ufs-irq',[value]))
-        self.ufs_irq.setToolTip(tr('CPU7 可能增加功耗，實際性能取決於負載。'))
-        form.addRow(QLabel('UFS 中斷位置'),self.ufs_irq)
+        self.combo(form,'Scheduler',['regular','lavd'],'scheduler','scheduler')
+        self.ufs_irq=StateButton('UFS interrupt affinity',[('system','Restore original','sliders-horizontal'),('powersave','Power saving CPU0–2','leaf'),('performance','Performance CPU7','zap')],lambda value:self.set('ufs-irq',[value]))
+        self.ufs_irq.setToolTip(tr('CPU7 may increase power use; performance depends on the workload.'))
+        form.addRow(QLabel('UFS interrupt affinity'),self.ufs_irq)
         self.sliders['rgb'] = self.lighting_brightness
-        form = group('按鍵')
-        for key,label in [('back','返回鍵'),('home','首頁鍵'),('back-home','返回鍵 + 首頁鍵')]:
+        form=group('Plasma')
+        self.plasma_status_bar=StateButton('Bottom-screen status bar',[(False,'Hidden','eye-off'),(True,'Visible','eye')],self.set_plasma_status_bar)
+        self.plasma_docked=StateButton('Plasma Docked Mode',[(False,'Off','monitor'),(True,'On','panels-top-left')],self.set_plasma_docked)
+        form.addRow(QLabel('Bottom-screen status bar'),self.plasma_status_bar); form.addRow(QLabel('Plasma Docked Mode'),self.plasma_docked)
+        note=QLabel('Docked Mode is a global Plasma Mobile setting. Only the bottom screen uses its Mobile panel here.'); note.setWordWrap(True); form.addRow(note)
+        self.refresh_plasma_settings()
+        form = group('Buttons',True)
+        for key,label in [('back','Back button'),('home','Home button'),('back-home','Back button + Home button')]:
             combo = Choice()
             for value,text in ACTIONS.items(): combo.addItem(text,value)
             combo.setCurrentIndex(combo.findData(self.prefs[key])); combo.activated.connect(lambda i,k=key,c=combo:self.set_button_action(k,c.currentData())); form.addRow(QLabel(label),combo)
-            command = QLineEdit(self.prefs[key+'_command']); command.setPlaceholderText('自訂指令，例如 konsole')
-            command.editingFinished.connect(lambda k=key,c=command:self.set_pref(k+'_command',c.text())); form.addRow(QLabel(label+'指令'),command)
+            command = QLineEdit(self.prefs[key+'_command']); command.setPlaceholderText('Custom command, e.g. konsole')
+            command.editingFinished.connect(lambda k=key,c=command:self.set_pref(k+'_command',c.text())); form.addRow(QLabel(label+' command'),command)
         form = group('Android')
-        warning = QLabel('極端實驗性功能：可能完全無法工作，甚至可能導致 Android 分區無法啟動。'); warning.setWordWrap(True); warning.setStyleSheet('color:#ffb176; font-weight:600;'); form.addRow(warning)
+        warning = QLabel('Extremely experimental: this may not work at all and may even prevent the Android partition from booting.'); warning.setWordWrap(True); warning.setStyleSheet('color:#ffb176; font-weight:600;'); form.addRow(warning)
         self.android_parts = []
-        self.android_combo = Choice(); self.android_combo.currentIndexChanged.connect(self.describe_android); form.addRow(QLabel('分區'),self.android_combo)
-        self.android_label = QLabel('按查詢讀取 Android 分區'); self.android_label.setWordWrap(True); form.addRow(self.android_label)
-        row = QHBoxLayout(); row.addWidget(self.button('查詢',self.refresh_android)); self.android_mount=self.button('唯讀掛載',lambda:self.android_action('mount-android')); row.addWidget(self.android_mount); row.addWidget(self.button('卸載',lambda:self.android_action('unmount-android'))); form.addRow(row)
-        form.addRow(self.button('開啟 Android 目錄',self.open_android))
+        self.android_combo = Choice(); self.android_combo.currentIndexChanged.connect(self.describe_android); form.addRow(QLabel('Partition'),self.android_combo)
+        self.android_label = QLabel('Query Android partitions'); self.android_label.setWordWrap(True); form.addRow(self.android_label)
+        row = QHBoxLayout(); row.addWidget(self.button('Query',self.refresh_android)); self.android_mount=self.button('Mount read-only',lambda:self.android_action('mount-android')); row.addWidget(self.android_mount); row.addWidget(self.button('Unmount',lambda:self.android_action('unmount-android'))); form.addRow(row)
+        form.addRow(self.button('Open Android folder',self.open_android))
         self.android_timer=QTimer(self); self.android_timer.setInterval(2000); self.android_timer.timeout.connect(lambda:self.refresh_android() if self.isVisible() else None); self.android_timer.start()
-        form = group('語言')
+        form = group('Language')
         language = Choice()
-        for text,value in [('跟隨系統','system'),('English','en'),('简体中文','zh_CN'),('繁體中文','zh_TW')]: language.addItem(text,value)
+        for text,value in [('System language','system'),('English','en'),('Simplified Chinese','zh_CN'),('Traditional Chinese','zh_TW')]: language.addItem(text,value)
         language.setCurrentIndex(language.findData(self.prefs['language']))
         language.activated.connect(lambda i:self.change_language(language.currentData()))
-        form.addRow(QLabel('語言'),language)
-        form = group('關於')
+        form.addRow(QLabel('Language'),language)
+        form = group('About')
         form.addRow(QLabel('HandheldDash'))
-        form.addRow(QLabel('版本'),QLabel(VERSION))
+        form.addRow(QLabel('Version'),QLabel(VERSION))
         source=QLabel('<a style="color:#bca6ff" href="https://github.com/lurenjiamax/HandheldDash">github.com/lurenjiamax/HandheldDash</a>')
-        source.setOpenExternalLinks(True); source.setWordWrap(True); form.addRow(QLabel('原始碼'),source)
-        for text in ['目前僅支援並測試過 AYN Thor（Thorch BSP）；未來將擴展其他掌機。','原創程式碼：LGPL-3.0-or-later。第三方元件保留各自授權；Lucide 圖示採 ISC，PyQt6 採 GPL／商業授權。','© 2026 lurenjiamax。本程式按現狀提供，不附任何擔保。']:
+        source.setOpenExternalLinks(True); source.setWordWrap(True); form.addRow(QLabel('Source code'),source)
+        for text in ['Currently supported and tested only on AYN Thor with the Thorch BSP; other handhelds are planned.','Original code: LGPL-3.0-or-later. Third-party components retain their licenses; Lucide icons use ISC and PyQt6 uses GPL/commercial licensing.','© 2026 lurenjiamax. Provided as-is, without warranty.']:
             label=QLabel(text); label.setWordWrap(True); form.addRow(label)
-        row = QHBoxLayout(); row.addWidget(self.button('上一組',lambda:self.change_group(-1)))
+        self.settings_navigation=QWidget(); row = QHBoxLayout(self.settings_navigation); row.setContentsMargins(0,0,0,0)
+        row.addWidget(self.button('Previous group',lambda:self.change_group(-1)))
         self.group_title = QLabel(); self.group_title.setAlignment(Qt.AlignmentFlag.AlignCenter); row.addWidget(self.group_title,1)
-        row.addWidget(self.button('下一組',lambda:self.change_group(1))); layout.addLayout(row); self.change_group(0)
+        row.addWidget(self.button('Next group',lambda:self.change_group(1))); layout.addWidget(self.settings_navigation); self.change_group(0)
+
+    def plasma_target_script(self):
+        screen=next((screen for screen in QApplication.screens() if screen.name() == 'DSI-1'),None)
+        if screen is None: return None
+        rect=screen.geometry(); target={'x':rect.x(),'y':rect.y(),'width':rect.width(),'height':rect.height()}
+        return ('var target='+json.dumps(target)+'; var ids=[]; '
+                'desktops().concat(panels()).forEach(function(item){if(item.screen>=0 && ids.indexOf(item.screen)<0) ids.push(item.screen);}); '
+                'var matches=ids.filter(function(id){var r=screenGeometry(id); return r.x===target.x && r.y===target.y && r.width===target.width && r.height===target.height;}); '
+                'if(matches.length!==1) throw new Error("Cannot uniquely resolve DSI-1 in Plasma"); var targetScreen=matches[0]; ')
+
+    def plasma_script(self,script,callback=None,failed=None):
+        interface=QDBusInterface('org.kde.plasmashell','/PlasmaShell','org.kde.PlasmaShell',self.session)
+        watcher=QDBusPendingCallWatcher(interface.asyncCall('evaluateScript',script),self); self.pending.add(watcher)
+        def done(w):
+            reply=QDBusPendingReply(w).reply(); self.pending.discard(w)
+            if reply.type() == QDBusMessage.MessageType.ErrorMessage:
+                self.notify('Error: '+reply.errorMessage())
+                if failed: failed()
+            elif callback and reply.arguments(): callback(str(reply.arguments()[0]).strip())
+            w.deleteLater()
+        watcher.finished.connect(done)
+
+    def refresh_plasma_settings(self):
+        from PyQt6.QtCore import QSettings
+        settings=QSettings(str(CONFIG.parent/'plasmamobilerc'),QSettings.Format.IniFormat)
+        self.plasma_docked.show_value(settings.value('General/convergenceModeEnabled',False,type=bool))
+        target=self.plasma_target_script()
+        if target is None:
+            self.plasma_status_bar.setEnabled(False); return
+        script=target+'print(JSON.stringify(panels().filter(function(p){return p.type === "org.kde.plasma.mobile.panel" && p.screen === targetScreen;}).map(function(p){return {height:p.height,location:p.location};})));'
+        def loaded(raw):
+            try: panels=json.loads(raw)
+            except ValueError: return
+            self.plasma_status_bar.setEnabled(True)
+            self.plasma_status_bar.show_value(bool(panels))
+            if panels: self.plasma_status_geometry=panels[0]
+        self.plasma_script(script,loaded,lambda:self.plasma_status_bar.setEnabled(False))
+
+    def set_plasma_status_bar(self,visible):
+        target=self.plasma_target_script()
+        if target is None:
+            self.plasma_status_bar.setEnabled(False); self.notify('Error: DSI-1 is unavailable'); return
+        geometry=getattr(self,'plasma_status_geometry',self.prefs.get('plasma_status_geometry',{'height':30,'location':'top'}))
+        self.set_pref('plasma_status_geometry',geometry)
+        script=target+'var matching=panels().filter(function(p){return p.type === "org.kde.plasma.mobile.panel" && p.screen === targetScreen;});'
+        if visible:
+            script+='if (!matching.length) { var p=new Panel("org.kde.plasma.mobile.panel"); p.screen=targetScreen; p.location='+json.dumps(geometry.get('location','top'))+'; p.height='+str(int(geometry.get('height',30)))+'; }'
+        else: script+='matching.forEach(function(p){p.remove();});'
+        self.plasma_script(script+'print("ok");',lambda raw:self.refresh_plasma_settings(),self.refresh_plasma_settings)
+
+    def set_plasma_docked(self,enabled):
+        process=QProcess(self); self.processes.add(process)
+        def finished(code,status):
+            self.processes.discard(process)
+            if code: self.notify('Error: '+bytes(process.readAllStandardError()).decode(errors='replace'))
+            self.refresh_plasma_settings(); process.deleteLater()
+        process.finished.connect(finished)
+        process.start('kwriteconfig6',['--file','plasmamobilerc','--group','General','--key','convergenceModeEnabled','--type','bool','--notify','true' if enabled else 'false'])
 
     def change_language(self,value):
         self.set_pref('language',value); set_language(value)
@@ -1379,7 +2202,8 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
         for widget in self.findChildren(QWidget):
             if hasattr(widget,'retranslate'): widget.retranslate()
         for i,title in enumerate(self.page_titles): self.tabs.setTabText(i,tr(title))
-        self.setWindowTitle(tr('AYN Thor 中控台'))
+        self.refresh_dashboard_editor()
+        self.setWindowTitle('HandheldDash')
 
     def translate_dialogs(self):
         app = QApplication.instance(); app.removeTranslator(self.qt_translator)
@@ -1388,10 +2212,11 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
 
     def change_group(self,delta):
         index=(self.settings_stack.currentIndex()+delta)%self.settings_stack.count(); self.settings_stack.setCurrentIndex(index)
+        self.settings_navigation.setVisible(True)
         self.group_title.setText(f'{self.group_names[index]} · {index+1} / {self.settings_stack.count()}')
 
     def call(self, method, args, callback=None, quiet=False, finished=None):
-        if method not in ('Status','LightingFrame','Feedback','Pointer'): self.error_text = None
+        if method not in ('Status','SetMonitoring','MonitoringDevices','LightingFrame','Feedback','Pointer'): self.error_text = None
         watcher = QDBusPendingCallWatcher(self.hardware.asyncCall(method,*args),self)
         self.pending.add(watcher)
         def done(w):
@@ -1401,12 +2226,12 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
             busy = reply.type() == QDBusMessage.MessageType.ErrorMessage and reply.errorName() == NAME+'.Busy'
             if busy: pass
             elif reply.type() == QDBusMessage.MessageType.ErrorMessage:
-                self.error_text = '錯誤：' + reply.errorMessage()
+                self.error_text = 'Error: ' + reply.errorMessage()
                 self.notify(self.error_text)
             elif callback:
                 try: callback(str(reply.arguments()[0]))
-                except (ValueError,KeyError,IndexError) as e: self.notify('回覆格式錯誤：'+str(e))
-            elif not quiet: self.notify('已套用設定')
+                except (ValueError,KeyError,IndexError) as e: self.notify('Invalid response: '+str(e))
+            elif not quiet: self.notify('Settings applied')
             if finished: finished(reply.type() != QDBusMessage.MessageType.ErrorMessage,busy)
             w.deleteLater()
         watcher.finished.connect(done)
@@ -1444,7 +2269,7 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
             self.prefs['mangohud_mode']=self.state.get('mangohud_mode','release')
             self.mango_mode.show_value(self.prefs['mangohud_mode'])
             controlled=self.prefs['mangohud_mode']=='takeover'
-            self.fps_mode.setEnabled(controlled); self.hud.setEnabled(controlled)
+            self.fps_mode.setEnabled(controlled and not self.dashboard_editing); self.hud.setEnabled(controlled)
             self.fan_link_control.show_value(self.state.get('fan_follow_performance',True))
             self.ufs_irq.show_value(self.state.get('ufs_irq_mode','system'))
             self.vibration.show_value(bool(self.state.get('vibration')))
@@ -1455,21 +2280,43 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
             self.sync_lighting(mode)
         b = self.state.get('battery',{})
         self.battery_text.setText('—%' if b.get('capacity') is None else f"{b['capacity']:.0f}%")
-        self.battery_icon.reading((b.get('capacity') or 0)/100,charging=b.get('status') == 'Charging')
+        status = 'Fast charging' if b.get('fast_charging') and b.get('status') == 'Charging' else 'Slow charging' if b.get('status') == 'Charging' else 'Not charging'
+        self.battery_icon.setToolTip(tr(status))
+        self.battery_icon.reading((b.get('capacity') or 0)/100,charging=b.get('status') == 'Charging',fast_charging=b.get('fast_charging',False))
         def fmt(v,digits=0): return '—' if v is None else f'{v:.{digits}f}'
         def gauge(key,text,fraction):
+            identity={'temp':'temperature','ram':'memory'}.get(key,key)
+            if identity not in active: return
             value,bar=self.gauges[key]; value.setText(text); bar.setValue(max(0,min(1000,round((fraction or 0)*1000))))
-            self.metric_icons[key].reading(fraction,rpm=self.state.get('fan_rpm') if key == 'fan' else 0,charging=b.get('status') == 'Charging')
-        gauge('cpu',f"CPU {fmt(self.state.get('cpu_mhz'))} MHz",(self.state.get('cpu_mhz') or 0)/(self.state.get('cpu_max_mhz') or 3200))
-        gauge('gpu',f"GPU {fmt(self.state.get('gpu_mhz'))} MHz",(self.state.get('gpu_mhz') or 0)/(self.state.get('gpu_max_mhz') or 680))
-        self.update_temperature()
+            self.metric_icons[key].reading(fraction,rpm=self.state.get('fan_rpm') if key == 'fan' else 0,charging=key == 'battery' and b.get('status') == 'Charging')
+        configuration=self.dashboard_draft if self.dashboard_editing else dashboard_layout(self.prefs.get('dashboard_layout'))
+        active=set(configuration.get('metric_order',['cpu','gpu','temperature','fan','memory','battery'])) if self.dashboard_editing or configuration['metrics'] else set()
+        for key,fallback in [('cpu',3200),('gpu',680)]:
+            current=self.state.get(key+'_mhz'); maximum=self.state.get(key+'_max_mhz'); fraction=(current or 0)/(maximum or fallback)
+            unit=configuration.get('metric_modes',{}).get(key,configuration.get('metric_mode','mhz'))
+            text=key.upper()+' '+(fmt(self.state.get(key+'_percent'))+'%' if unit == 'percent' else fmt(current)+' / '+fmt(maximum)+' MHz')
+            gauge(key,text,fraction); self.gauges[key][0].setToolTip(tr('Utilization unavailable') if unit == 'percent' and self.state.get(key+'_percent') is None else '')
+        if 'temperature' in active: self.update_temperature()
         gauge('fan',f"{fmt(self.state.get('fan_rpm'))} RPM",(self.state.get('fan_percent') or 0)/100)
         gauge('ram',f"{fmt(self.state.get('ram_used_gb'),1)} / {fmt(self.state.get('ram_total_gb'),0)} GB",(self.state.get('ram_used_gb') or 0)/(self.state.get('ram_total_gb') or 1))
+        load=self.state.get('load_average',[])
+        gauge('load',' · '.join(fmt(value,2) for value in load) if len(load)==3 else '— · — · —',0)
+        self.gauges['load'][0].setToolTip(tr('1 min · 5 min · 15 min'))
+        def speed(value):
+            if value is None: return '—'
+            for unit in ('B','K','M','G'):
+                if value<1024 or unit == 'G': return f'{value:.0f}{unit}/s' if unit == 'B' else f'{value:.1f}{unit}/s'
+                value/=1024
+        for key,prefixes in [('network',('↓','↑')),('disk_io',('R','W'))]:
+            source=configuration.get('metric_sources',{}).get(key,'all'); rates=self.state.get(key,{}).get(source,[None,None])
+            gauge(key,' '.join(prefix+speed(value) for prefix,value in zip(prefixes,rates)),0)
+            self.gauges[key][0].setToolTip(source+' · '+tr('Bytes per second; K/M/G use powers of 1024'))
         charging=b.get('status') == 'Charging'
         self.power_temperature.setText(f"{fmt(b.get('temp'),1)} °C")
-        suffix = ' · '+tr('快充') if charging and b.get('fast_charging') else ''
-        gauge('battery',f"{fmt(b.get('watts'),1)} W{suffix}",(b.get('watts') or 0)/30)
-        self.gauges['battery'][0].setToolTip(tr('充電功率' if charging else '功率消耗'))
+        suffix = ' · '+tr('Fast charging' if b.get('fast_charging') else 'Slow charging') if b.get('charger_connected') else ''
+        watts=b.get('watts'); text='—' if watts is None else f'{watts:.1f}' if abs(watts)>=.05 else '0.0'
+        gauge('battery',f"{text} W{suffix}",abs(watts or 0)/30)
+        self.gauges['battery'][0].setToolTip(tr('Net battery power: negative means discharging; charging label describes the connected source.'))
         self.gauges['fan'][0].setToolTip(f"PWM {fmt(self.state.get('fan_percent'))}% · {self.state.get('fan_rpm_source')}")
         self.update_fan()
         irqs=self.state.get('ufs_irqs',[]); self.ufs_irq.setEnabled(bool(irqs))
@@ -1506,10 +2353,12 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
         if self.isVisible(): self.refresh_audio()
         if self.isVisible() and self.tabs.currentIndex() == self.tasks_index: self.refresh_tasks()
         if not self.status_busy and self.write_active is None and not self.write_queue:
+            self.sync_monitoring()
             self.status_busy = True
             revision = self.write_revision
             self.call('Status',[],lambda raw:self.update_state(raw) if revision == self.write_revision else None,True)
-        files = [p for folder in (DATA/'fps',Path('/var/cache/handhelddash/fps')) if folder.is_dir() for p in folder.glob('*.csv')]
+        configuration=self.dashboard_draft if self.dashboard_editing else dashboard_layout(self.prefs.get('dashboard_layout'))
+        files = [p for folder in (DATA/'fps',Path('/var/cache/handhelddash/fps')) if folder.is_dir() for p in folder.glob('*.csv')] if configuration.get('show_fps',True) else []
         files = [p for p in files if not p.name.endswith('_summary.csv') and time.time()-p.stat().st_mtime < 4]
         self.fps.setText('— FPS'); self.fps_source.setText('')
         if files:
@@ -1566,23 +2415,31 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
         self.set_pref('hud',value); self.update_mangohud()
 
     def set_autolock(self,value):
-        self.set_pref('autolock',value)
-        self.start('kwriteconfig6','--file','kscreenlockerrc','--group','Daemon','--key','Autolock','true' if value else 'false')
-        QTimer.singleShot(150,lambda:self.session_call('org.kde.screensaver','/ScreenSaver','org.kde.screensaver','configure',[]))
+        for interface,cookie in self.caffeine_cookies:
+            interface.call('UnInhibit',QDBusArgument(cookie,QMetaType.Type.UInt.value))
+        self.caffeine_cookies = []
+        if value:
+            for service,path,api in [('org.freedesktop.PowerManagement','/org/freedesktop/PowerManagement/Inhibit','org.freedesktop.PowerManagement.Inhibit'),('org.freedesktop.ScreenSaver','/ScreenSaver','org.freedesktop.ScreenSaver')]:
+                interface = QDBusInterface(service,path,api,self.session)
+                reply = interface.call('Inhibit','HandheldDash','Manually block sleep and screen locking')
+                if reply.type() == QDBusMessage.MessageType.ErrorMessage:
+                    self.notify(reply.errorMessage()); self.set_autolock(False); return
+                self.caffeine_cookies.append((interface,reply.arguments()[0]))
+        self.set_pref('caffeine_enabled',bool(value)); self.autolock.show_value(bool(value))
 
     def set_rgb_mode(self,value):
         self.stop_lighting()
         self.set('lighting-mode',[value])
 
     def choose_color(self):
-        color = QColorDialog.getColor(QColor(self.state.get('rgb_static_hex','#0080ff')),self,'氛圍燈顏色')
+        color = QColorDialog.getColor(QColor(self.state.get('rgb_static_hex','#0080ff')),self,'Lighting color')
         if color.isValid(): self.set('rgb-color',list(map(str,[color.red(),color.green(),color.blue()])))
 
     def start(self,*args):
         process = QProcess(self); self.processes.add(process)
-        process.errorOccurred.connect(lambda error: self.notify('無法啟動：'+args[0]+' · '+process.errorString()))
+        process.errorOccurred.connect(lambda error: self.notify('Cannot start: '+args[0]+' · '+process.errorString()))
         def finished(code,status):
-            if code: self.notify(process.readAllStandardError().data().decode(errors='replace') or f'{args[0]} 結束碼 {code}')
+            if code: self.notify(process.readAllStandardError().data().decode(errors='replace') or f'{args[0]} exit code {code}')
             self.processes.discard(process); process.deleteLater()
         process.finished.connect(finished); process.start('taskset',['--cpu-list',','.join(map(str,sorted(self.system_cpus))),*args])
 
@@ -1598,8 +2455,9 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
     def action(self, action):
         if action == 'none': return
         if action == 'reset-touchscreen': self.set('reset-touchscreen',[]); return
-        if action == 'escape' and self.touchpad.isVisible():
-            self.exit_touchpad(); return
+        if action == 'escape' and self.isVisible():
+            if self.touchpad.isVisible(): self.exit_touchpad()
+            return
         if action in ('lighting-left','lighting-right'):
             if self.isVisible() and self.tabs.currentIndex() == self.lighting_index: self.lighting_pads[0 if action=='lighting-left' else 1].toggle_color()
             return
@@ -1616,7 +2474,7 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
 
     @staticmethod
     def screenshot_choices():
-        return [('region','區域截圖','camera'),('top','上屏截圖','monitor'),('bottom','下屏截圖','monitor')]
+        return [('region','Region capture','camera'),('top','Top screen capture','monitor'),('bottom','Bottom screen capture','monitor')]
 
     def set_screenshot_mode(self,value):
         if value not in ('region','top','bottom'): return
@@ -1630,7 +2488,7 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
         geometries = {screen.name():screen.geometry() for screen in QApplication.screens()}
         name = 'DSI-2' if mode == 'top' else 'DSI-1'
         if mode != 'region' and name not in geometries:
-            self.error_text = tr('找不到截圖屏幕'); self.notify(self.error_text); return
+            self.error_text = tr('Capture screen is unavailable'); self.notify(self.error_text); return
         folder = Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.PicturesLocation))/'AYN Thor'
         try: folder.mkdir(parents=True,exist_ok=True)
         except OSError as exc: self.error_text=str(exc); self.notify(self.error_text); return
@@ -1646,16 +2504,16 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
                 for geometry in geometries.values(): bounds = bounds.united(geometry)
                 sx = image.width()/bounds.width(); sy = image.height()/bounds.height()
                 if image.isNull() or abs(sx-sy)*max(bounds.width(),bounds.height()) > 2:
-                    success = False; error = tr('截圖尺寸與屏幕配置不符')
+                    success = False; error = tr('Capture size does not match screen layout')
                 else:
                     g = geometries[name]
                     x = round((g.x()-bounds.x())*sx); y = round((g.y()-bounds.y())*sy)
                     right = round((g.x()+g.width()-bounds.x())*sx); bottom = round((g.y()+g.height()-bounds.y())*sy)
                     success = image.copy(x,y,right-x,bottom-y).save(str(target))
-            if success: self.start('notify-send',tr('截圖'),str(target))
+            if success: self.start('notify-send',tr('Screenshot'),str(target))
             elif mode == 'region' and code == 0 and not target.exists(): self.showFullScreen()
             else:
-                self.error_text = tr('截圖失敗')+' · '+error
+                self.error_text = tr('Screenshot failed')+' · '+error
                 self.showFullScreen(); self.notify(self.error_text)
             process.deleteLater()
         process.finished.connect(done)
@@ -1698,7 +2556,7 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
         rules['General']['count']=str(len(ids))
         rules[rule]={'Description':'HandheldDash panel preserves game focus',
                      'wmclass':'org.aynthor.Control','wmclassmatch':'1',
-                     'title':tr('AYN Thor 中控台'),'titlematch':'1',
+                     'title':'HandheldDash','titlematch':'1',
                      'acceptfocus':'false','acceptfocusrule':'2'}
         file.parent.mkdir(parents=True,exist_ok=True)
         stage=file.with_suffix('.handhelddash-new')
@@ -1715,14 +2573,14 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
         if self.isVisible(): self.hide()
         else:
             if self.tabs.currentIndex()==self.tasks_index: self.refresh_tasks()
-            self.setWindowTitle(tr('AYN Thor 中控台'))
+            self.setWindowTitle('HandheldDash')
             self.setWindowFlag(Qt.WindowType.WindowDoesNotAcceptFocus,True)
             self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating,True)
             self.place(); self.showFullScreen(); self.raise_(); self.refresh()
 
     @pyqtSlot()
     def Settings(self):
-        self.setWindowTitle('AYN Thor Settings')
+        self.setWindowTitle('HandheldDash Settings')
         self.setWindowFlag(Qt.WindowType.WindowDoesNotAcceptFocus,False)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating,False)
         self.tabs.setCurrentIndex(self.settings_index); self.place(); self.showFullScreen(); self.raise_(); self.activateWindow(); self.refresh()
@@ -1730,6 +2588,29 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
     @pyqtSlot(str, result=bool)
     def Snapshot(self,path):
         return self.grab().save(path)
+
+    def snapshot_english(self,path):
+        language=self.prefs.get('language','system'); tab=self.tabs.currentIndex(); editing=self.dashboard_editing; size=self.size()
+        title=self.header_title.source_text; popups=[popup for popup in self.findChildren(EmbeddedPopup) if not popup.isHidden()]
+        def translate(language):
+            set_language(language); self.translate_dialogs()
+            for widget in self.findChildren(QWidget):
+                if hasattr(widget,'retranslate'): widget.retranslate()
+                if isinstance(widget,StateButton): widget.render()
+            for index,name in enumerate(self.page_titles): self.tabs.setTabText(index,tr(name))
+            if self.state: self.update_state(json.dumps(self.state))
+        try:
+            for popup in popups: popup.hide()
+            screen=next((screen for screen in QApplication.screens() if screen.name() == 'DSI-1'),None)
+            if not self.isVisible() and screen is not None: self.resize(screen.geometry().size())
+            self.dashboard_editing=False; self.header_title.setText('HandheldDash'); self.open_tab(0)
+            translate('en'); self.apply_dashboard_layout(); QApplication.processEvents()
+            return self.grab().save(path)
+        finally:
+            self.dashboard_editing=editing; self.header_title.setText(title); translate(language)
+            self.apply_dashboard_layout(); self.tabs.setCurrentIndex(tab)
+            if not self.isVisible(): self.resize(size)
+            for popup in popups: popup.show()
 
     def place(self):
         screen = next((s for s in QApplication.screens() if s.name() == 'DSI-1'),QApplication.primaryScreen())
@@ -1748,17 +2629,17 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
         self.call('AndroidPartitions',[],update)
 
     def describe_android(self,index):
-        if not self.android_parts: self.android_label.setText('未找到 Android 分區'); return
+        if not self.android_parts: self.android_label.setText('No Android partitions found'); return
         if not 0 <= index < len(self.android_parts): return
         p=self.android_parts[index]
-        self.android_mount.setText(tr('讀寫掛載' if p['label'] == 'userdata' else '唯讀掛載'))
+        self.android_mount.setText(tr('Mount read/write' if p['label'] == 'userdata' else 'Mount read-only'))
         self.android_mount.setEnabled(p['mountable'] and not p.get('busy') and not p.get('mounted'))
         if p['label'] == 'userdata':
-            state = tr('已掛載' if p.get('mounted') else '尚未掛載')
-            backend = tr('解鎖後端已就緒' if p.get('backend_ready') else '需要匹配核心、原始金鑰與解鎖後端')
+            state = tr('Mounted' if p.get('mounted') else 'Not mounted')
+            backend = tr('Unlock backend ready' if p.get('backend_ready') else 'Matching kernel, original keys and unlock backend required')
             self.android_label.setText('/sdcard → /mnt/android-data/media/0\n'+state+' · '+p.get('service_state','')+'\n'+backend+('\n'+p['error'] if p.get('error') else ''))
             return
-        self.android_label.setText(f"{index+1} / {len(self.android_parts)} · {p.get('filesystem') or 'super 邏輯分區'}\n"+(p['reason'] or '可唯讀掛載'))
+        self.android_label.setText(f"{index+1} / {len(self.android_parts)} · {p.get('filesystem') or 'super logical partition'}\n"+(p['reason'] or 'Read-only mounting available'))
 
     def android_action(self,operation):
         label = self.android_combo.currentData()
@@ -1770,7 +2651,7 @@ registerShortcut('HandheldDash Exit Touchpad','Exit HandheldDash touchpad mode',
     def open_android(self):
         if self.android_combo.currentData() == 'userdata':
             part=next((p for p in self.android_parts if p['label'] == 'userdata'),{})
-            if not part.get('mounted'): self.notify(tr('尚未掛載')); return
+            if not part.get('mounted'): self.notify(tr('Not mounted')); return
             self.call('Set',['userdata-share',['userdata']],lambda _:self.start('xdg-open','/mnt/aynthor-android/userdata'))
         else:
             self.start('xdg-open','/mnt/aynthor-android/'+str(self.android_combo.currentData() or ''))
@@ -1806,7 +2687,7 @@ callDBus('org.aynthor.Control','/Control','org.aynthor.Control','WindowList',JSO
         for i,button in enumerate(self.task_buttons):
             index=self.task_page*6+i; button.setChecked(False); button.setEnabled(index<len(self.task_records))
             record=self.task_records[index] if index<len(self.task_records) else None
-            text=(record['caption'][:24]+' · '+tr('上屏' if record.get('screen')=='DSI-2' else '下屏' if record.get('screen')=='DSI-1' else '其他屏幕')) if record else '—'
+            text=(record['caption'][:24]+' · '+tr('Top screen' if record.get('screen')=='DSI-2' else 'Bottom screen' if record.get('screen')=='DSI-1' else 'Other screen')) if record else '—'
             button.setIcon(self.app_icon(record) if record else QIcon())
             button.setToolTip(record['caption'] if record else '')
             button.setText(text); button.setVisible(record is not None)
@@ -1830,15 +2711,25 @@ callDBus('org.aynthor.Control','/Control','org.aynthor.Control','WindowList',JSO
         offset = self.task_page*6+index
         if offset >= len(self.task_records): return
         record = dict(self.task_records[offset]); menu = QMenu(self)
-        for name,title in [('DSI-2','移到上屏'),('DSI-1','移到下屏')]:
+        for name,title in [('DSI-2','Move to top screen'),('DSI-1','Move to bottom screen')]:
             action = menu.addAction(control_icon('monitor'),tr(title))
             action.triggered.connect(lambda checked=False,n=name:self.move_task(record,n))
         menu.addSeparator()
         saved = self.prefs.get('app_screens',{}).get(record['app'].lower(),'')
-        for name,title in [('DSI-2','總是在上屏開啟'),('DSI-1','總是在下屏開啟'),('','跟隨預設屏幕')]:
+        for name,title in [('DSI-2','Always open on top screen'),('DSI-1','Always open on bottom screen'),('','Use default screen')]:
             action = menu.addAction(tr(title)); action.setCheckable(True); action.setChecked(name==saved)
             action.triggered.connect(lambda checked=False,n=name:self.remember_task_screen(record,n))
+        menu.addSeparator()
+        action = menu.addAction(control_icon('circle-x'),tr('Force close'))
+        pid = int(record.get('pid') or 0)
+        try: started = Path(f'/proc/{pid}/stat').read_text().rsplit(')',1)[1].split()[19]
+        except (OSError,IndexError): started = ''
+        action.setEnabled(pid > 1 and bool(started))
+        action.triggered.connect(lambda:self.force_close_task(pid,started))
         menu.exec(self.task_buttons[index].mapToGlobal(self.task_buttons[index].rect().center()))
+
+    def force_close_task(self,pid,started):
+        self.call('Set',['kill-task',[str(pid),started]],lambda _:self.refresh_tasks())
 
     def remember_task_screen(self,record,name):
         rules = dict(self.prefs.get('app_screens',{})); key = record['app'].lower()
@@ -1859,7 +2750,6 @@ callDBus('org.aynthor.Control','/Control','org.aynthor.Control','WindowList',JSO
         record=self.task_records[self.task_page*6+index]
         script=CONFIG/'activate-task.js'
         script.write_text("const w=workspace.windowList().find(w=>String(w.internalId)==="+json.dumps(record['id'])+"); if(w){w.minimized=false; workspace.activeWindow=w;}")
-        self.hide()
         self.start('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.unloadScript','aynthor-activate')
         QTimer.singleShot(150,lambda:self.start('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.loadScript',str(script),'aynthor-activate'))
         QTimer.singleShot(300,lambda:self.start('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.start'))
@@ -1873,16 +2763,17 @@ def main():
         env = os.environ.copy()
         os.execvpe('mangohud',['mangohud',*args],env)
     QApplication.setAttribute(Qt.ApplicationAttribute.AA_CompressHighFrequencyEvents,False)
-    app = QApplication(sys.argv); app.setStyle(ControlStyle('Fusion')); app.setQuitOnLastWindowClosed(False); app.setDesktopFileName('org.aynthor.Control')
+    app = QApplication(sys.argv); app.setStyle(ControlStyle(app.style().objectName())); app.setQuitOnLastWindowClosed(False); app.setDesktopFileName('org.aynthor.Control')
     bus = QDBusConnection.sessionBus()
     if bus.interface().isServiceRegistered(APP).value():
         if '--background' in sys.argv: return
         interface = QDBusInterface(APP,'/Control',APP,bus)
         if '--snapshot' in sys.argv: interface.call('Snapshot',sys.argv[sys.argv.index('--snapshot')+1])
-        else: interface.call('Settings' if '--settings' in sys.argv else 'Toggle')
+        else: interface.call('Customize' if '--customize' in sys.argv else 'Settings' if '--settings' in sys.argv else 'Toggle')
         return
     panel = Panel()
-    if '--settings' in sys.argv: panel.Settings()
+    if '--customize' in sys.argv: panel.Settings(); panel.open_dashboard_editor()
+    elif '--settings' in sys.argv: panel.Settings()
     elif '--background' not in sys.argv: panel.Toggle()
     sys.exit(app.exec())
 

@@ -10,7 +10,7 @@ status-json`、`thorch-fancontrol status-json`、自定义曲线配置及风扇�
 
 ```sh
 sha256sum -c SHA256SUMS
-sudo pacman -U handhelddash-1.0.0-1-any.pkg.tar.zst
+sudo pacman -U handhelddash-1.2.0-1-any.pkg.tar.zst
 sudo systemctl enable --now inputplumber.service aynthor-hardwared.service
 systemctl --user enable --now aynthor-control.service
 handhelddash
@@ -37,3 +37,9 @@ AYN 键唤出／隐藏中控；`handhelddash --settings` 打开设置。状态�
 任务长按可移动或记住屏幕。截图点击执行、长按选择区域／上屏／下屏。在灯光页点击预览或
 按 L3/R3 打开色环，手柄模式下转动对应摇杆选色，再按一次关闭。鼠标模式由 daemon 通过
 InputPlumber 切换，右摇杆控制指针、左摇杆对应 WASD；该模式下色环使用触控选择。
+
+Android userdata 为可选功能，不在 Dash 启动时加载模块。点击挂载后，`/usr/lib/aynthor/userdata-mount`
+根据当前内核版本通过 modprobe 加载已安装模块，或校验并加载
+`/var/lib/aynthor/android/tme-modules/<当前内核版本>/` 下的私有模块，再加载 dm-default-key
+和 quota_v2，调用已配置的 KeyMint 后端。模块缺失或不匹配只影响本次挂载，不影响 Dash 启动。
+升级内核后需要重新编译私有模块，不能通过重命名旧模块绕过版本匹配。设备密钥和运行库仍需单独配置。

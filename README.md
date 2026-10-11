@@ -8,6 +8,8 @@
 - task switching, region/top/bottom screenshots, playback volume 
 - independent joystick lighting with audio-reactive output and color dials
 - configurable Home/Back actions, and gamepad/mouse input profiles. 
+- customizable control and monitoring cards, with optional load/network/disk-IO readings
+- brightness/volume popups and native Plasma Mobile status-bar / Docked Mode settings
  
 The daemon lets an active local user operate supported hardware without running the interface as root. [Features and limits](docs/features.md).
 
@@ -30,9 +32,9 @@ sudo systemctl enable --now inputplumber.service aynthor-hardwared.service
 systemctl --user enable --now aynthor-control.service
 ```
 
-Press the AYN key to toggle the panel. Or run `handhelddash`, open `handhelddash --settings`, or  [Installation, upgrades and source builds](docs/installation.md).
+Press the AYN key to toggle the panel. Or run `handhelddash`, open `handhelddash --settings`, or  [Installation, upgrades and source builds](docs/installation.md). **FPS collection is limited to applications launched with MangoHud. Emulators must be explicitly launched through MangoHud**, for example `mangohud eden`; launching the emulator normally does not enable FPS collection. Taking over the MangoHud configuration does not load MangoHud into an application.
 
 ### License
-Original project code is licensed under **LGPL-3.0-or-later**; see [LICENSE](LICENSE) and [COPYING](COPYING). Vendored lpunpack and Lucide icons retain their LGPL and ISC notices; dependencies retain their own licenses, including PyQt6's GPL/commercial terms. 
+Original project code is licensed under **LGPL-3.0-or-later**; see [LICENSE](LICENSE) and [COPYING](COPYING). Vendored lpunpack, Tabler and Lucide icons retain their LGPL, MIT and ISC notices; dependencies retain their own licenses, including PyQt6's GPL/commercial terms.
 
 This is community software without warranty, and hardware support must not be assumed beyond AYN. [Third-party notices](docs/third-party.md).

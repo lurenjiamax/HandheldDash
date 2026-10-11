@@ -1,0 +1,1437 @@
+{
+  "Net battery power: negative means discharging; charging label describes the connected source.": {"en":"Net battery power: negative means discharging; charging label describes the connected source.","zh_CN":"电池净功率：负号表示电量消耗；快充/慢充描述接入的充电源。","zh_TW":"電池淨功率：負號表示電量消耗；快充/慢充描述接入的充電來源。"},
+  "Plasma": {"en":"Plasma","zh_CN":"Plasma","zh_TW":"Plasma"},
+  "Bottom-screen status bar": {"en":"Bottom-screen status bar","zh_CN":"副屏状态栏","zh_TW":"副螢幕狀態列"},
+  "Plasma Docked Mode": {"en":"Plasma Docked Mode","zh_CN":"Plasma Docked Mode","zh_TW":"Plasma Docked Mode"},
+  "Hidden": {"en":"Hidden","zh_CN":"隐藏","zh_TW":"隱藏"},
+  "Visible": {"en":"Visible","zh_CN":"显示","zh_TW":"顯示"},
+  "Docked Mode is a global Plasma Mobile setting. Only the bottom screen uses its Mobile panel here.": {"en":"Docked Mode is a global Plasma Mobile setting. Only the bottom screen uses its Mobile panel here.","zh_CN":"Docked Mode 是 Plasma Mobile 全局设置。本机仅副屏使用 Mobile 面板。","zh_TW":"Docked Mode 是 Plasma Mobile 全域設定。本機僅副螢幕使用 Mobile 面板。"},
+  "Remove a metric before adding another.": {"en":"Remove a metric before adding another.","zh_CN":"请先移除一项监控，再添加新项目。","zh_TW":"請先移除一項監控，再新增項目。"},
+  "System load": {"en":"System load","zh_CN":"系统负载","zh_TW":"系統負載"},
+  "Network speed": {"en":"Network speed","zh_CN":"网速","zh_TW":"網速"},
+  "Disk IO": {"en":"Disk IO","zh_CN":"磁盘 IO","zh_TW":"磁碟 IO"},
+  "Interface": {"en":"Interface","zh_CN":"网卡","zh_TW":"網卡"},
+  "Disk": {"en":"Disk","zh_CN":"磁盘","zh_TW":"磁碟"},
+  "1 min · 5 min · 15 min": {"en":"1 min · 5 min · 15 min","zh_CN":"1分钟 · 5分钟 · 15分钟","zh_TW":"1分鐘 · 5分鐘 · 15分鐘"},
+  "Bytes per second; K/M/G use powers of 1024": {"en":"Bytes per second; K/M/G use powers of 1024","zh_CN":"字节/秒；K/M/G 按 1024 换算","zh_TW":"位元組/秒；K/M/G 按 1024 換算"},
+  "Add metric": {"en":"Add metric","zh_CN":"添加监控","zh_TW":"新增監控"},
+  "Add control": {"en":"Add control","zh_CN":"添加控制","zh_TW":"新增控制"},
+  "Utilization unavailable": {"en":"Utilization unavailable","zh_CN":"暂无使用率数据","zh_TW":"暫無使用率資料"},
+  "Fan mode": {"en":"Fan mode","zh_CN":"风扇模式","zh_TW":"風扇模式"},
+  "Frequency display": {"en":"Frequency display","zh_CN":"频率显示","zh_TW":"頻率顯示"},
+  "Percent": {"en":"Percent","zh_CN":"百分比","zh_TW":"百分比"},
+  "Percentage of maximum frequency": {"en":"Percentage of maximum frequency","zh_CN":"当前频率占最大频率的百分比","zh_TW":"目前頻率佔最大頻率的百分比"},
+  "Hold a tile to edit it.": {"en":"Hold a tile to edit it.","zh_CN":"长按磁贴，打开该磁贴的编辑菜单。","zh_TW":"長按磁貼，開啟該磁貼的編輯選單。"},
+  "Hold the top-right edit icon for editing actions.": {"en":"Hold the top-right edit icon for editing actions.","zh_CN":"长按右上角编辑图标，打开编辑菜单。","zh_TW":"長按右上角編輯圖示，開啟編輯選單。"},
+  "Tap two tiles to swap, or drag to reorder. All tiles can be removed.": {"en":"Tap two tiles to swap, or drag to reorder. All tiles can be removed.","zh_CN":"依次点击两张磁贴交换位置，或拖动排序。所有磁贴均可移除。","zh_TW":"依序點擊兩張磁貼交換位置，或拖曳排序。所有磁貼均可移除。"},
+  "Edit all tiles directly on the dashboard.": {"en":"Edit all tiles directly on the dashboard.","zh_CN":"直接在中控页面编辑所有磁贴。","zh_TW":"直接在中控頁面編輯所有磁貼。"},
+  "FPS limit": {"en":"FPS limit","zh_CN":"帧率限制","zh_TW":"幀率限制"},
+  "Move earlier": {"en":"Move earlier","zh_CN":"前移","zh_TW":"前移"},
+  "Cap": {"en":"Cap","zh_CN":"限帧","zh_TW":"限幀"},
+  "Focus": {"en":"Focus","zh_CN":"手柄焦点","zh_TW":"手把焦點"},
+  "Select tile": {"en":"Select tile","zh_CN":"选择磁贴","zh_TW":"選擇磁貼"},
+  "Edit dashboard": {"en":"Edit dashboard","zh_CN":"编辑中控","zh_TW":"編輯中控"},
+  "Fixed core control": {"en":"Fixed core control","zh_CN":"固定核心控制","zh_TW":"固定核心控制"},
+  "Core controls stay fixed. Tap two tiles to swap, or drag to reorder.": {"en":"Core controls stay fixed. Tap two tiles to swap, or drag to reorder.","zh_CN":"性能和风扇固定。依次点击两张磁贴交换位置，或拖动排序。","zh_TW":"效能和風扇固定。依序點擊兩張磁貼交換位置，或拖曳排序。"},
+  "Performance and fan stay fixed. Edit the other tiles directly on the dashboard.": {"en":"Performance and fan stay fixed. Edit the other tiles directly on the dashboard.","zh_CN":"性能和风扇保持固定，其余磁贴直接在中控页面编辑。","zh_TW":"效能和風扇保持固定，其餘磁貼直接在中控頁面編輯。"},
+  "Performance mode": {
+    "en": "Performance mode",
+    "zh_CN": "性能模式",
+    "zh_TW": "效能模式"
+  },
+  "Drag to reorder. Tap − to remove, + to add.": {
+    "en": "Drag to reorder. Tap − to remove, + to add.",
+    "zh_CN": "拖动排序，点击 − 移除，点击 + 添加。",
+    "zh_TW": "拖曳排序，點擊 − 移除，點擊 + 新增。"
+  },
+  "Your tiles": {
+    "en": "Your tiles",
+    "zh_CN": "已添加",
+    "zh_TW": "已新增"
+  },
+  "Add tiles": {
+    "en": "Add tiles",
+    "zh_CN": "可添加",
+    "zh_TW": "可新增"
+  },
+  "Add tile": {
+    "en": "Add tile",
+    "zh_CN": "添加磁贴",
+    "zh_TW": "新增磁貼"
+  },
+  "Remove tile": {
+    "en": "Remove tile",
+    "zh_CN": "移除磁贴",
+    "zh_TW": "移除磁貼"
+  },
+  "Show metrics": {
+    "en": "Show metrics",
+    "zh_CN": "监控信息",
+    "zh_TW": "監控資訊"
+  },
+  "On": {
+    "en": "On",
+    "zh_CN": "开启",
+    "zh_TW": "開啟"
+  },
+  "Off": {
+    "en": "Off",
+    "zh_CN": "关闭",
+    "zh_TW": "關閉"
+  },
+  "Open overview": {
+    "en": "Open overview",
+    "zh_CN": "查看任务",
+    "zh_TW": "檢視工作"
+  },
+  "Adjust": {
+    "en": "Adjust",
+    "zh_CN": "调节",
+    "zh_TW": "調節"
+  },
+  "Muted": {
+    "en": "Muted",
+    "zh_CN": "已静音",
+    "zh_TW": "已靜音"
+  },
+  "Done": {
+    "en": "Done",
+    "zh_CN": "完成",
+    "zh_TW": "完成"
+  },
+  "Reset": {
+    "en": "Reset",
+    "zh_CN": "恢复默认",
+    "zh_TW": "恢復預設"
+  },
+  "Customize dashboard": {
+    "en": "Customize dashboard",
+    "zh_CN": "自定义中控",
+    "zh_TW": "自訂中控"
+  },
+  "Quick controls": {
+    "en": "Quick controls",
+    "zh_CN": "快捷控制",
+    "zh_TW": "快捷控制"
+  },
+  "Live metrics": {
+    "en": "Live metrics",
+    "zh_CN": "实时监控",
+    "zh_TW": "即時監控"
+  },
+  "Quick actions": {
+    "en": "Quick actions",
+    "zh_CN": "快捷操作",
+    "zh_TW": "快捷操作"
+  },
+  "Dashboard components": {
+    "en": "Dashboard components",
+    "zh_CN": "中控组件",
+    "zh_TW": "中控元件"
+  },
+  "Choose a section, select a component, then change its visibility, width or order. Apply saves the layout; Cancel restores the saved layout.": {
+    "en": "Choose a section, select a component, then change its visibility, width or order. Apply saves the layout; Cancel restores the saved layout.",
+    "zh_CN": "选择分区和组件，可调整显示、宽度及顺序。应用后保存布局；取消恢复已保存的布局。",
+    "zh_TW": "選擇分區和元件，可調整顯示、寬度及順序。套用後儲存佈局；取消恢復已儲存的佈局。"
+  },
+  "Default layout": {
+    "en": "Default layout",
+    "zh_CN": "默认布局",
+    "zh_TW": "預設佈局"
+  },
+  "Gaming layout": {
+    "en": "Gaming layout",
+    "zh_CN": "游戏布局",
+    "zh_TW": "遊戲佈局"
+  },
+  "Monitoring layout": {
+    "en": "Monitoring layout",
+    "zh_CN": "监控布局",
+    "zh_TW": "監控佈局"
+  },
+  "Load preset": {
+    "en": "Load preset",
+    "zh_CN": "载入预设",
+    "zh_TW": "載入預設"
+  },
+  "Visible": {
+    "en": "Visible",
+    "zh_CN": "显示",
+    "zh_TW": "顯示"
+  },
+  "Hidden": {
+    "en": "Hidden",
+    "zh_CN": "隐藏",
+    "zh_TW": "隱藏"
+  },
+  "Wide": {
+    "en": "Wide",
+    "zh_CN": "双格宽度",
+    "zh_TW": "雙格寬度"
+  },
+  "Standard width": {
+    "en": "Standard width",
+    "zh_CN": "单格宽度",
+    "zh_TW": "單格寬度"
+  },
+  "Move up": {
+    "en": "Move up",
+    "zh_CN": "上移",
+    "zh_TW": "上移"
+  },
+  "Move down": {
+    "en": "Move down",
+    "zh_CN": "下移",
+    "zh_TW": "下移"
+  },
+  "Apply": {
+    "en": "Apply",
+    "zh_CN": "应用",
+    "zh_TW": "套用"
+  },
+  "Cancel": {
+    "en": "Cancel",
+    "zh_CN": "取消",
+    "zh_TW": "取消"
+  },
+  "Caffine": {
+    "en": "Caffine",
+    "zh_CN": "Caffine",
+    "zh_TW": "Caffine"
+  },
+  "Slow charging": {
+    "en": "Slow charging",
+    "zh_CN": "慢充",
+    "zh_TW": "慢充"
+  },
+  "Not charging": {
+    "en": "Not charging",
+    "zh_CN": "未充电",
+    "zh_TW": "未充電"
+  },
+  "Manually block sleep and screen locking": {
+    "en": "Manually block sleep and screen locking",
+    "zh_CN": "手动阻止休眠和锁屏",
+    "zh_TW": "Manually block sleep and screen locking"
+  },
+  "Back button + Home button": {
+    "en": "Back button + Home button",
+    "zh_CN": "返回键 + 主页键",
+    "zh_TW": "返回鍵 + 首頁鍵"
+  },
+  "Reset touchscreen driver": {
+    "en": "Reset touchscreen driver",
+    "zh_CN": "重置触控驱动",
+    "zh_TW": "重置觸控驅動"
+  },
+  "Release configuration": {
+    "en": "Release configuration",
+    "zh_CN": "配置释放",
+    "zh_TW": "配置釋放"
+  },
+  "Take over configuration": {
+    "en": "Take over configuration",
+    "zh_CN": "配置接管",
+    "zh_TW": "配置接管"
+  },
+  "Panel CPU": {
+    "en": "Panel CPU",
+    "zh_CN": "中控 CPU",
+    "zh_TW": "中控 CPU"
+  },
+  "System default": {
+    "en": "System default",
+    "zh_CN": "跟随系统",
+    "zh_TW": "跟隨系統"
+  },
+  "Little cores only": {
+    "en": "Little cores only",
+    "zh_CN": "仅小核",
+    "zh_TW": "僅小核"
+  },
+  "Limits only the panel; externally launched apps are unrestricted.": {
+    "en": "Limits only the panel; externally launched apps are unrestricted.",
+    "zh_CN": "仅限制中控应用；外部启动的应用不受限制。",
+    "zh_TW": "僅限制中控應用；外部啟動的應用不受限制。"
+  },
+  "About": {
+    "en": "About",
+    "zh_CN": "关于",
+    "zh_TW": "關於"
+  },
+  "Version": {
+    "en": "Version",
+    "zh_CN": "版本",
+    "zh_TW": "版本"
+  },
+  "Source code": {
+    "en": "Source code",
+    "zh_CN": "源代码",
+    "zh_TW": "原始碼"
+  },
+  "Performance profile": {
+    "en": "Performance profile",
+    "zh_CN": "性能 profile",
+    "zh_TW": "效能策略"
+  },
+  "Fan curve": {
+    "en": "Fan curve",
+    "zh_CN": "风扇曲线",
+    "zh_TW": "風扇曲線"
+  },
+  "Currently supported and tested only on AYN Thor with the Thorch BSP; other handhelds are planned.": {
+    "en": "Currently supported and tested only on AYN Thor with the Thorch BSP; other handhelds are planned.",
+    "zh_CN": "目前仅支持并测试过 AYN Thor（Thorch BSP）；未来将扩展其他掌机。",
+    "zh_TW": "目前僅支援並測試過 AYN Thor（Thorch BSP）；未來將擴展其他掌機。"
+  },
+  "Original code: LGPL-3.0-or-later. Third-party components retain their licenses; Lucide icons use ISC and PyQt6 uses GPL/commercial licensing.": {
+    "en": "Original code: LGPL-3.0-or-later. Third-party components retain their licenses; Lucide icons use ISC and PyQt6 uses GPL/commercial licensing.",
+    "zh_CN": "原创代码：LGPL-3.0-or-later。第三方组件保留各自授权；Lucide 图标采用 ISC，PyQt6 采用 GPL／商业授权。",
+    "zh_TW": "原創程式碼：LGPL-3.0-or-later。第三方元件保留各自授權；Lucide 圖示採 ISC，PyQt6 採 GPL／商業授權。"
+  },
+  "© 2026 lurenjiamax. Provided as-is, without warranty.": {
+    "en": "© 2026 lurenjiamax. Provided as-is, without warranty.",
+    "zh_CN": "© 2026 lurenjiamax。本程序按现状提供，不附任何担保。",
+    "zh_TW": "© 2026 lurenjiamax。本程式按現狀提供，不附任何擔保。"
+  },
+  "Power": {
+    "en": "Power",
+    "zh_CN": "功率",
+    "zh_TW": "功率"
+  },
+  "Fast charging": {
+    "en": "Fast charging",
+    "zh_CN": "快充",
+    "zh_TW": "快充"
+  },
+  "Charging": {
+    "en": "Charging",
+    "zh_CN": "充电功率",
+    "zh_TW": "充電功率"
+  },
+  "Power draw": {
+    "en": "Power draw",
+    "zh_CN": "功率消耗",
+    "zh_TW": "功率消耗"
+  },
+  "Top": {
+    "en": "Top",
+    "zh_CN": "主屏",
+    "zh_TW": "主屏"
+  },
+  "Bottom": {
+    "en": "Bottom",
+    "zh_CN": "副屏",
+    "zh_TW": "副屏"
+  },
+  "Both": {
+    "en": "Both",
+    "zh_CN": "双屏",
+    "zh_TW": "雙屏"
+  },
+  "Move current app": {
+    "en": "Move current app",
+    "zh_CN": "移动当前应用",
+    "zh_TW": "移動目前應用"
+  },
+  "New apps: top": {
+    "en": "New apps: top",
+    "zh_CN": "新应用：上屏",
+    "zh_TW": "新應用：上屏"
+  },
+  "New apps: bottom": {
+    "en": "New apps: bottom",
+    "zh_CN": "新应用：下屏",
+    "zh_TW": "新應用：下屏"
+  },
+  "Boost off": {
+    "en": "Boost off",
+    "zh_CN": "Boost 关闭",
+    "zh_TW": "Boost 關閉"
+  },
+  "Boost on": {
+    "en": "Boost on",
+    "zh_CN": "Boost 开启",
+    "zh_TW": "Boost 開啟"
+  },
+  "Unmute": {
+    "en": "Unmute",
+    "zh_CN": "取消静音",
+    "zh_TW": "取消靜音"
+  },
+  "X: minimum/maximum brightness; Y: sensitivity.": {
+    "en": "X: minimum/maximum brightness; Y: sensitivity.",
+    "zh_CN": "X：最低／最高亮度；Y：响应灵敏度。",
+    "zh_TW": "X：最低／最高亮度；Y：響應靈敏度。"
+  },
+  "Mount read/write": {
+    "en": "Mount read/write",
+    "zh_CN": "读写挂载",
+    "zh_TW": "讀寫掛載"
+  },
+  "Mounted": {
+    "en": "Mounted",
+    "zh_CN": "已挂载",
+    "zh_TW": "已掛載"
+  },
+  "Not mounted": {
+    "en": "Not mounted",
+    "zh_CN": "尚未挂载",
+    "zh_TW": "尚未掛載"
+  },
+  "Unlock backend ready": {
+    "en": "Unlock backend ready",
+    "zh_CN": "解锁后端已就绪",
+    "zh_TW": "解鎖後端已就緒"
+  },
+  "Matching kernel, original keys and unlock backend required": {
+    "en": "Matching kernel, original keys and unlock backend required",
+    "zh_CN": "需要匹配内核、原始密钥与解锁后端",
+    "zh_TW": "需要匹配核心、原始金鑰與解鎖後端"
+  },
+  "Gamepad focus": {
+    "en": "Gamepad focus",
+    "zh_CN": "手柄焦点",
+    "zh_TW": "手柄焦點"
+  },
+  "Automatic": {
+    "en": "Automatic",
+    "zh_CN": "自动切换",
+    "zh_TW": "自動切換"
+  },
+  "Lock top screen": {
+    "en": "Lock top screen",
+    "zh_CN": "锁定上屏",
+    "zh_TW": "鎖定上屏"
+  },
+  "Lock bottom screen": {
+    "en": "Lock bottom screen",
+    "zh_CN": "锁定下屏",
+    "zh_TW": "鎖定下屏"
+  },
+  "Controls desktop focus; apps reading gamepad devices directly are not isolated.": {
+    "en": "Controls desktop focus; apps reading gamepad devices directly are not isolated.",
+    "zh_CN": "控制桌面焦点，不能隔离自行读取手柄的应用。",
+    "zh_TW": "控制桌面焦點，不能隔離自行讀取手柄的應用。"
+  },
+  "Top screen blanked": {
+    "en": "Top screen blanked",
+    "zh_CN": "上屏遮黑",
+    "zh_TW": "上屏遮黑"
+  },
+  "Bottom screen blanked": {
+    "en": "Bottom screen blanked",
+    "zh_CN": "下屏遮黑",
+    "zh_TW": "下屏遮黑"
+  },
+  "CPU7 may increase power use; performance depends on the workload.": {
+    "en": "CPU7 may increase power use; performance depends on the workload.",
+    "zh_CN": "CPU7 可能增加功耗，实际性能取决于负载。",
+    "zh_TW": "CPU7 可能增加功耗，實際性能取決於負載。"
+  },
+  "Top screen visible": {
+    "en": "Top screen visible",
+    "zh_CN": "上屏显示",
+    "zh_TW": "上屏顯示"
+  },
+  "Bottom screen visible": {
+    "en": "Bottom screen visible",
+    "zh_CN": "下屏显示",
+    "zh_TW": "下屏顯示"
+  },
+  "Screen blanked": {
+    "en": "Screen blanked",
+    "zh_CN": "屏幕遮黑",
+    "zh_TW": "屏幕遮黑"
+  },
+  "UFS interrupt affinity": {
+    "en": "UFS interrupt affinity",
+    "zh_CN": "UFS 中断位置",
+    "zh_TW": "UFS 中斷位置"
+  },
+  "Restore original": {
+    "en": "Restore original",
+    "zh_CN": "恢复原配置",
+    "zh_TW": "恢復原配置"
+  },
+  "Power saving CPU0–2": {
+    "en": "Power saving CPU0–2",
+    "zh_CN": "省电 CPU0–2",
+    "zh_TW": "省電 CPU0–2"
+  },
+  "Performance CPU7": {
+    "en": "Performance CPU7",
+    "zh_CN": "高性能 CPU7",
+    "zh_TW": "高性能 CPU7"
+  },
+  "Allowed CPUs": {
+    "en": "Allowed CPUs",
+    "zh_CN": "允许 CPU",
+    "zh_TW": "允許 CPU"
+  },
+  "Effective CPUs": {
+    "en": "Effective CPUs",
+    "zh_CN": "实际 CPU",
+    "zh_TW": "實際 CPU"
+  },
+  "No UFS interrupt found": {
+    "en": "No UFS interrupt found",
+    "zh_CN": "找不到 UFS 中断",
+    "zh_TW": "找不到 UFS 中斷"
+  },
+  "Advanced values": {
+    "en": "Advanced values",
+    "zh_CN": "高级数值面板",
+    "zh_TW": "進階數值面板"
+  },
+  "Edit as custom": {
+    "en": "Edit as custom",
+    "zh_CN": "编辑为自定义",
+    "zh_TW": "編輯為自訂"
+  },
+  "Fan linkage": {
+    "en": "Fan linkage",
+    "zh_CN": "风扇联动",
+    "zh_TW": "風扇聯動"
+  },
+  "Follow performance": {
+    "en": "Follow performance",
+    "zh_CN": "随性能",
+    "zh_TW": "隨效能"
+  },
+  "Independent": {
+    "en": "Independent",
+    "zh_CN": "独立调节",
+    "zh_TW": "獨立調節"
+  },
+  "Tab management": {
+    "en": "Tab management",
+    "zh_CN": "TAB 管理",
+    "zh_TW": "TAB 管理"
+  },
+  "Pinned": {
+    "en": "Pinned",
+    "zh_CN": "常驻",
+    "zh_TW": "常駐"
+  },
+  "Open": {
+    "en": "Open",
+    "zh_CN": "打开",
+    "zh_TW": "開啟"
+  },
+  "Touchpad": {
+    "en": "Touchpad",
+    "zh_CN": "触控板",
+    "zh_TW": "觸控板"
+  },
+  "Left click": {
+    "en": "Left click",
+    "zh_CN": "左键",
+    "zh_TW": "左鍵"
+  },
+  "Right click": {
+    "en": "Right click",
+    "zh_CN": "右键",
+    "zh_TW": "右鍵"
+  },
+  "Bottom touchpad → top-screen pointer": {
+    "en": "Bottom touchpad → top-screen pointer",
+    "zh_CN": "下屏触控板 → 上屏鼠标",
+    "zh_TW": "下屏觸控板 → 上屏鼠標"
+  },
+  "One finger: move / tap to click. Two fingers: scroll / tap for right click. Pointer stays on the top screen.": {
+    "en": "One finger: move / tap to click. Two fingers: scroll / tap for right click. Pointer stays on the top screen.",
+    "zh_CN": "单指移动／轻点左键；双指滚动／轻点右键。光标限制在上屏。",
+    "zh_TW": "單指移動／輕點左鍵；雙指滾動／輕點右鍵。光標限制在上屏。"
+  },
+  "Pin your tabs. Open other pages here; they close when you leave. Settings always remains available.": {
+    "en": "Pin your tabs. Open other pages here; they close when you leave. Settings always remains available.",
+    "zh_CN": "选择常驻页面；其他页面可从此处开启，离开后自动收起。设置页始终保留。",
+    "zh_TW": "選擇常駐頁面；其他頁面可從此處開啟，離開後自動收起。設定頁始終保留。"
+  },
+  "Top-screen pointer interface is unavailable": {
+    "en": "Top-screen pointer interface is unavailable",
+    "zh_CN": "找不到上屏鼠标接口",
+    "zh_TW": "找不到上屏鼠標接口"
+  },
+  "Input mode": {
+    "en": "Input mode",
+    "zh_CN": "输入模式",
+    "zh_TW": "輸入模式"
+  },
+  "Gamepad mode": {
+    "en": "Gamepad mode",
+    "zh_CN": "手柄模式",
+    "zh_TW": "手柄模式"
+  },
+  "Mouse mode": {
+    "en": "Mouse mode",
+    "zh_CN": "鼠标模式",
+    "zh_TW": "鼠標模式"
+  },
+  "High": {
+    "en": "High",
+    "zh_CN": "高",
+    "zh_TW": "高"
+  },
+  "Low": {
+    "en": "Low",
+    "zh_CN": "低",
+    "zh_TW": "低"
+  },
+  "X: minimum/maximum brightness. Y: response sensitivity (S). Audio auto-normalizes while preserving stereo balance.": {
+    "en": "X: minimum/maximum brightness. Y: response sensitivity (S). Audio auto-normalizes while preserving stereo balance.",
+    "zh_CN": "X：最低／最高亮度；Y：响应灵敏度（S）。音量自动归一化，保留左右声道差异。",
+    "zh_TW": "X：最低／最高亮度；Y：響應靈敏度（S）。音量自動歸一化，保留左右聲道差異。"
+  },
+  "Tap a preview or press L3/R3 to open the dial. Rotate that stick to select colors; press again to close.": {
+    "en": "Tap a preview or press L3/R3 to open the dial. Rotate that stick to select colors; press again to close.",
+    "zh_CN": "点击预览或按 L3／R3 开启色环，转动对应摇杆逐格选色，再按一次关闭。",
+    "zh_TW": "點擊預覽或按 L3／R3 開啟色環，轉動對應搖杆逐格選色，再按一次關閉。"
+  },
+  "Red": {
+    "en": "Red",
+    "zh_CN": "红色",
+    "zh_TW": "紅色"
+  },
+  "Orange": {
+    "en": "Orange",
+    "zh_CN": "橙色",
+    "zh_TW": "橙色"
+  },
+  "Yellow": {
+    "en": "Yellow",
+    "zh_CN": "黄色",
+    "zh_TW": "黃色"
+  },
+  "Lime": {
+    "en": "Lime",
+    "zh_CN": "黄绿色",
+    "zh_TW": "黃綠色"
+  },
+  "Green": {
+    "en": "Green",
+    "zh_CN": "绿色",
+    "zh_TW": "綠色"
+  },
+  "Mint": {
+    "en": "Mint",
+    "zh_CN": "薄荷绿",
+    "zh_TW": "薄荷綠"
+  },
+  "Cyan": {
+    "en": "Cyan",
+    "zh_CN": "青色",
+    "zh_TW": "青色"
+  },
+  "Sky blue": {
+    "en": "Sky blue",
+    "zh_CN": "天蓝色",
+    "zh_TW": "天藍色"
+  },
+  "Blue": {
+    "en": "Blue",
+    "zh_CN": "蓝色",
+    "zh_TW": "藍色"
+  },
+  "Purple": {
+    "en": "Purple",
+    "zh_CN": "紫色",
+    "zh_TW": "紫色"
+  },
+  "Magenta": {
+    "en": "Magenta",
+    "zh_CN": "洋红色",
+    "zh_TW": "洋紅色"
+  },
+  "Rose": {
+    "en": "Rose",
+    "zh_CN": "玫红色",
+    "zh_TW": "玫紅色"
+  },
+  "Tap a stick preview or press its stick (L3/R3) to open the color ring.": {
+    "en": "Tap a stick preview or press its stick (L3/R3) to open the color ring.",
+    "zh_CN": "点击摇杆预览或按下对应摇杆（L3／R3）开启色环。",
+    "zh_TW": "點擊搖杆預覽或按下對應搖杆（L3／R3）開啟色環。"
+  },
+  "Extremely experimental: this may not work at all and may even prevent the Android partition from booting.": {
+    "en": "Extremely experimental: this may not work at all and may even prevent the Android partition from booting.",
+    "zh_CN": "极端实验性功能：可能完全无法工作，甚至可能导致 Android 分区无法启动。",
+    "zh_TW": "極端實驗性功能：可能完全無法工作，甚至可能導致 Android 分區無法啟動。"
+  },
+  "Left stick light": {
+    "en": "Left stick light",
+    "zh_CN": "左摇杆灯",
+    "zh_TW": "左搖杆燈"
+  },
+  "Right stick light": {
+    "en": "Right stick light",
+    "zh_CN": "右摇杆灯",
+    "zh_TW": "右搖杆燈"
+  },
+  "Brightness and sensitivity": {
+    "en": "Brightness and sensitivity",
+    "zh_CN": "亮度与灵敏度",
+    "zh_TW": "亮度與靈敏度"
+  },
+  "Brightness": {
+    "en": "Brightness",
+    "zh_CN": "亮度",
+    "zh_TW": "亮度"
+  },
+  "Drag the two points: X sets minimum/maximum brightness, Y sets sensitivity.": {
+    "en": "Drag the two points: X sets minimum/maximum brightness, Y sets sensitivity.",
+    "zh_CN": "拖动两个点：横向调整最低／最高亮度，纵向调整灵敏度。",
+    "zh_TW": "拖動兩個點：橫向調整最低／最高亮度，縱向調整靈敏度。"
+  },
+  "Region capture": {
+    "en": "Region capture",
+    "zh_CN": "区域截图",
+    "zh_TW": "區域截圖"
+  },
+  "Top screen capture": {
+    "en": "Top screen capture",
+    "zh_CN": "上屏截图",
+    "zh_TW": "上屏截圖"
+  },
+  "Bottom screen capture": {
+    "en": "Bottom screen capture",
+    "zh_CN": "下屏截图",
+    "zh_TW": "下屏截圖"
+  },
+  "Capture mode": {
+    "en": "Capture mode",
+    "zh_CN": "截图模式",
+    "zh_TW": "截圖模式"
+  },
+  "Tap to capture, hold to change mode": {
+    "en": "Tap to capture, hold to change mode",
+    "zh_CN": "点击截图，长按切换模式",
+    "zh_TW": "點擊截圖，長按切換模式"
+  },
+  "Capture screen is unavailable": {
+    "en": "Capture screen is unavailable",
+    "zh_CN": "找不到截图屏幕",
+    "zh_TW": "找不到截圖屏幕"
+  },
+  "Capture size does not match screen layout": {
+    "en": "Capture size does not match screen layout",
+    "zh_CN": "截图尺寸与屏幕配置不符",
+    "zh_TW": "截圖尺寸與屏幕配置不符"
+  },
+  "Playback source": {
+    "en": "Playback source",
+    "zh_CN": "内录来源",
+    "zh_TW": "內錄來源"
+  },
+  "Headphones": {
+    "en": "Headphones",
+    "zh_CN": "耳机",
+    "zh_TW": "耳機"
+  },
+  "Speakers": {
+    "en": "Speakers",
+    "zh_CN": "扬声器",
+    "zh_TW": "揚聲器"
+  },
+  "Desktop default": {
+    "en": "Desktop default",
+    "zh_CN": "跟随桌面",
+    "zh_TW": "跟隨桌面"
+  },
+  "Top screen": {
+    "en": "Top screen",
+    "zh_CN": "上屏",
+    "zh_TW": "上屏"
+  },
+  "Bottom screen": {
+    "en": "Bottom screen",
+    "zh_CN": "下屏",
+    "zh_TW": "下屏"
+  },
+  "Other screen": {
+    "en": "Other screen",
+    "zh_CN": "其他屏幕",
+    "zh_TW": "其他屏幕"
+  },
+  "New application screen": {
+    "en": "New application screen",
+    "zh_CN": "新应用默认屏幕",
+    "zh_TW": "新應用預設屏幕"
+  },
+  "Tasks show their screen. Hold a task to move it or remember its launch screen.": {
+    "en": "Tasks show their screen. Hold a task to move it or remember its launch screen.",
+    "zh_CN": "任务页显示应用所在屏幕；长按可移动并记住启动屏幕。",
+    "zh_TW": "工作頁顯示應用所在屏幕；長按可移動並記住啟動屏幕。"
+  },
+  "Speaker volume is shared by both displays.": {
+    "en": "Speaker volume is shared by both displays.",
+    "zh_CN": "音量控制共用扬声器，与上下屏无关。",
+    "zh_TW": "音量控制共用揚聲器，與上下屏無關。"
+  },
+  "Move to top screen": {
+    "en": "Move to top screen",
+    "zh_CN": "移到上屏",
+    "zh_TW": "移到上屏"
+  },
+  "Move to bottom screen": {
+    "en": "Move to bottom screen",
+    "zh_CN": "移到下屏",
+    "zh_TW": "移到下屏"
+  },
+  "Always open on top screen": {
+    "en": "Always open on top screen",
+    "zh_CN": "总是在上屏打开",
+    "zh_TW": "總是在上屏開啟"
+  },
+  "Always open on bottom screen": {
+    "en": "Always open on bottom screen",
+    "zh_CN": "总是在下屏打开",
+    "zh_TW": "總是在下屏開啟"
+  },
+  "Use default screen": {
+    "en": "Use default screen",
+    "zh_CN": "跟随默认屏幕",
+    "zh_TW": "跟隨預設屏幕"
+  },
+  "Lighting": {
+    "en": "Lighting",
+    "zh_CN": "氛围灯",
+    "zh_TW": "氛圍燈"
+  },
+  "Audio reactive": {
+    "en": "Audio reactive",
+    "zh_CN": "音频律动",
+    "zh_TW": "音頻律動"
+  },
+  "Left light · left channel": {
+    "en": "Left light · left channel",
+    "zh_CN": "左灯 · 左声道",
+    "zh_TW": "左燈 · 左聲道"
+  },
+  "Right light · right channel": {
+    "en": "Right light · right channel",
+    "zh_CN": "右灯 · 右声道",
+    "zh_TW": "右燈 · 右聲道"
+  },
+  "Audio sensitivity": {
+    "en": "Audio sensitivity",
+    "zh_CN": "律动灵敏度",
+    "zh_TW": "律動靈敏度"
+  },
+  "Color": {
+    "en": "Color",
+    "zh_CN": "颜色",
+    "zh_TW": "顏色"
+  },
+  "Playback audio drives the left and right stick lights separately. Silence turns the lights off.": {
+    "en": "Playback audio drives the left and right stick lights separately. Silence turns the lights off.",
+    "zh_CN": "内录播放音频；左右声道分别控制左右摇杆灯。静音时灯光熄灭。",
+    "zh_TW": "內錄播放音頻；左右聲道分別控制左右搖杆燈。靜音時燈光熄滅。"
+  },
+  "Audio reactive lighting is off": {
+    "en": "Audio reactive lighting is off",
+    "zh_CN": "音频律动未启用",
+    "zh_TW": "音頻律動未啟用"
+  },
+  "Cannot capture playback audio": {
+    "en": "Cannot capture playback audio",
+    "zh_CN": "无法读取播放音频",
+    "zh_TW": "無法讀取播放音頻"
+  },
+  "Screenshot failed": {
+    "en": "Screenshot failed",
+    "zh_CN": "截图失败",
+    "zh_TW": "截圖失敗"
+  },
+  "Android hardware-wrapped encryption; Linux unlock is not yet supported.": {
+    "en": "Android hardware-wrapped encryption; Linux unlock is not yet supported.",
+    "zh_CN": "Android 使用硬件封装加密；Linux 尚未支持解锁。",
+    "zh_TW": "Android 使用硬體封裝加密；Linux 尚未支援解鎖。"
+  },
+  "Screen control": {
+    "en": "Screen control",
+    "zh_CN": "屏幕控制",
+    "zh_TW": "屏幕控制"
+  },
+  "Both displays": {
+    "en": "Both displays",
+    "zh_CN": "双屏亮度",
+    "zh_TW": "雙屏亮度"
+  },
+  "Volume": {
+    "en": "Volume",
+    "zh_CN": "音量",
+    "zh_TW": "音量"
+  },
+  "Mute": {
+    "en": "Mute",
+    "zh_CN": "静音",
+    "zh_TW": "靜音"
+  },
+  "Lock disabled": {
+    "en": "Lock disabled",
+    "zh_CN": "锁定停用",
+    "zh_TW": "鎖定停用"
+  },
+  "Manual": {
+    "en": "Manual",
+    "zh_CN": "手动调节",
+    "zh_TW": "手動調節"
+  },
+  "Adaptive": {
+    "en": "Adaptive",
+    "zh_CN": "智能调节",
+    "zh_TW": "智慧調節"
+  },
+  "Controller layout": {
+    "en": "Controller layout",
+    "zh_CN": "手柄布局",
+    "zh_TW": "手柄布局"
+  },
+  "Layout unavailable": {
+    "en": "Layout unavailable",
+    "zh_CN": "布局不支持",
+    "zh_TW": "布局不支援"
+  },
+  "Bypass unavailable": {
+    "en": "Bypass unavailable",
+    "zh_CN": "旁路不支持",
+    "zh_TW": "旁路不支援"
+  },
+  "Rumble off": {
+    "en": "Rumble off",
+    "zh_CN": "震动关闭",
+    "zh_TW": "震動關閉"
+  },
+  "Rumble on": {
+    "en": "Rumble on",
+    "zh_CN": "震动开启",
+    "zh_TW": "震動開啟"
+  },
+  "Lights off": {
+    "en": "Lights off",
+    "zh_CN": "灯光关闭",
+    "zh_TW": "燈光關閉"
+  },
+  "Battery lights": {
+    "en": "Battery lights",
+    "zh_CN": "电量灯光",
+    "zh_TW": "電量燈光"
+  },
+  "Static lights": {
+    "en": "Static lights",
+    "zh_CN": "固定灯光",
+    "zh_TW": "固定燈光"
+  },
+  "Overlay off": {
+    "en": "Overlay off",
+    "zh_CN": "浮层关闭",
+    "zh_TW": "浮層關閉"
+  },
+  "Overlay on": {
+    "en": "Overlay on",
+    "zh_CN": "浮层开启",
+    "zh_TW": "浮層開啟"
+  },
+  "Fan": {
+    "en": "Fan",
+    "zh_CN": "风扇",
+    "zh_TW": "風扇"
+  },
+  "Custom": {
+    "en": "Custom",
+    "zh_CN": "自定义模式",
+    "zh_TW": "自訂效能"
+  },
+  "Hottest sensor": {
+    "en": "Hottest sensor",
+    "zh_CN": "最热传感器",
+    "zh_TW": "最熱感測器"
+  },
+  "Average sensors": {
+    "en": "Average sensors",
+    "zh_CN": "平均传感器",
+    "zh_TW": "平均感測器"
+  },
+  "Copy to custom": {
+    "en": "Copy to custom",
+    "zh_CN": "复制为自定义",
+    "zh_TW": "複製為自訂"
+  },
+  "Apply custom curve": {
+    "en": "Apply custom curve",
+    "zh_CN": "应用自定义曲线",
+    "zh_TW": "套用自訂曲線"
+  },
+  "Unsaved curve": {
+    "en": "Unsaved curve",
+    "zh_CN": "未应用的曲线",
+    "zh_TW": "未套用的曲線"
+  },
+  "Temperatures must rise, speeds must not fall, final speed must be 100%": {
+    "en": "Temperatures must rise, speeds must not fall, final speed must be 100%",
+    "zh_CN": "温度须递增，转速不可递减，最后一点须为 100%",
+    "zh_TW": "溫度須遞增，轉速不可遞減，最後一點須為 100%"
+  },
+  "Control": {
+    "en": "Control",
+    "zh_CN": "中控",
+    "zh_TW": "中控"
+  },
+  "Modes": {
+    "en": "Modes",
+    "zh_CN": "模式",
+    "zh_TW": "模式"
+  },
+  "Tasks": {
+    "en": "Tasks",
+    "zh_CN": "任务",
+    "zh_TW": "工作"
+  },
+  "Settings": {
+    "en": "Settings",
+    "zh_CN": "设置",
+    "zh_TW": "設定"
+  },
+  "Performance": {
+    "en": "Performance",
+    "zh_CN": "高性能",
+    "zh_TW": "高效能"
+  },
+  "Cooling": {
+    "en": "Cooling",
+    "zh_CN": "散热",
+    "zh_TW": "散熱"
+  },
+  "Displays": {
+    "en": "Displays",
+    "zh_CN": "屏幕",
+    "zh_TW": "螢幕"
+  },
+  "Buttons": {
+    "en": "Buttons",
+    "zh_CN": "按键",
+    "zh_TW": "按鍵"
+  },
+  "Language": {
+    "en": "Language",
+    "zh_CN": "语言",
+    "zh_TW": "語言"
+  },
+  "System language": {
+    "en": "System language",
+    "zh_CN": "跟随系统",
+    "zh_TW": "跟隨系統"
+  },
+  "Temperature": {
+    "en": "Temperature",
+    "zh_CN": "温度",
+    "zh_TW": "溫度"
+  },
+  "Battery": {
+    "en": "Battery",
+    "zh_CN": "电池",
+    "zh_TW": "電池"
+  },
+  "Battery temperature": {
+    "en": "Battery temperature",
+    "zh_CN": "电池温度",
+    "zh_TW": "電池溫度"
+  },
+  "Show desktop": {
+    "en": "Show desktop",
+    "zh_CN": "显示桌面",
+    "zh_TW": "顯示桌面"
+  },
+  "Overview": {
+    "en": "Overview",
+    "zh_CN": "概览",
+    "zh_TW": "工作概覽"
+  },
+  "Control panel": {
+    "en": "Control panel",
+    "zh_CN": "中控台",
+    "zh_TW": "中控台"
+  },
+  "Screenshot": {
+    "en": "Screenshot",
+    "zh_CN": "截图",
+    "zh_TW": "截圖"
+  },
+  "Move to other display": {
+    "en": "Move to other display",
+    "zh_CN": "移至另一屏幕",
+    "zh_TW": "移至另一螢幕"
+  },
+  "Disabled": {
+    "en": "Disabled",
+    "zh_CN": "停用",
+    "zh_TW": "停用"
+  },
+  "Custom command": {
+    "en": "Custom command",
+    "zh_CN": "自定义命令",
+    "zh_TW": "自訂指令"
+  },
+  "Custom command, e.g. konsole": {
+    "en": "Custom command, e.g. konsole",
+    "zh_CN": "自定义命令，例如 konsole",
+    "zh_TW": "自訂指令，例如 konsole"
+  },
+  "Auto lock": {
+    "en": "Auto lock",
+    "zh_CN": "自动锁定",
+    "zh_TW": "自動鎖定"
+  },
+  "Quiet": {
+    "en": "Quiet",
+    "zh_CN": "低噪音",
+    "zh_TW": "低噪音"
+  },
+  "Balanced": {
+    "en": "Balanced",
+    "zh_CN": "平衡",
+    "zh_TW": "平衡"
+  },
+  "Smart mode": {
+    "en": "Smart mode",
+    "zh_CN": "智能模式",
+    "zh_TW": "智慧模式"
+  },
+  "Clear cache": {
+    "en": "Clear cache",
+    "zh_CN": "清理缓存",
+    "zh_TW": "清理記憶體"
+  },
+  "Gamepad": {
+    "en": "Gamepad",
+    "zh_CN": "游戏手柄",
+    "zh_TW": "遊戲手柄"
+  },
+  "Mouse / keyboard": {
+    "en": "Mouse / keyboard",
+    "zh_CN": "鼠标／键盘",
+    "zh_TW": "滑鼠／鍵盤"
+  },
+  "Bypass charging": {
+    "en": "Bypass charging",
+    "zh_CN": "旁路供电",
+    "zh_TW": "旁路供電"
+  },
+  "No confirmed bypass charging control": {
+    "en": "No confirmed bypass charging control",
+    "zh_CN": "未找到已确认的旁路供电控制接口",
+    "zh_TW": "未找到已確認的旁路供電控制介面"
+  },
+  "Vibration": {
+    "en": "Vibration",
+    "zh_CN": "振动",
+    "zh_TW": "震動"
+  },
+  "FPS overlay": {
+    "en": "FPS overlay",
+    "zh_CN": "FPS 浮层",
+    "zh_TW": "FPS 浮層"
+  },
+  "Unlimited": {
+    "en": "Unlimited",
+    "zh_CN": "不限帧",
+    "zh_TW": "不限幀"
+  },
+  "Lower CPU/GPU power, quieter fan": {
+    "en": "Lower CPU/GPU power, quieter fan",
+    "zh_CN": "省电 CPU／GPU，较晚的风扇升速",
+    "zh_TW": "省電 CPU／GPU，較晚的風扇升速"
+  },
+  "Adaptive CPU/GPU, balanced fan": {
+    "en": "Adaptive CPU/GPU, balanced fan",
+    "zh_CN": "按负载调节 CPU／GPU，平衡风扇",
+    "zh_TW": "依負載調節 CPU／GPU，平衡風扇"
+  },
+  "Maximum CPU/GPU clocks, active cooling": {
+    "en": "Maximum CPU/GPU clocks, active cooling",
+    "zh_CN": "最大 CPU／GPU 频率，积极散热",
+    "zh_TW": "最大 CPU／GPU 時脈，積極散熱"
+  },
+  "Launch game": {
+    "en": "Launch game",
+    "zh_CN": "启动游戏",
+    "zh_TW": "啟動遊戲"
+  },
+  "Program and arguments": {
+    "en": "Program and arguments",
+    "zh_CN": "程序与参数",
+    "zh_TW": "程式與參數"
+  },
+  "Previous": {
+    "en": "Previous",
+    "zh_CN": "上一页",
+    "zh_TW": "上一頁"
+  },
+  "Next": {
+    "en": "Next",
+    "zh_CN": "下一页",
+    "zh_TW": "下一頁"
+  },
+  "Refresh": {
+    "en": "Refresh",
+    "zh_CN": "刷新",
+    "zh_TW": "重新整理"
+  },
+  "End selected app": {
+    "en": "End selected app",
+    "zh_CN": "结束选中应用",
+    "zh_TW": "結束選取應用"
+  },
+  "End app": {
+    "en": "End app",
+    "zh_CN": "结束应用",
+    "zh_TW": "結束應用"
+  },
+  "End ": {
+    "en": "End ",
+    "zh_CN": "结束 ",
+    "zh_TW": "結束 "
+  },
+  "? Unsaved work may be lost.": {
+    "en": "? Unsaved work may be lost.",
+    "zh_CN": "？未保存的内容可能丢失。",
+    "zh_TW": "？未儲存的內容可能遺失。"
+  },
+  "App exited or PID was reused": {
+    "en": "App exited or PID was reused",
+    "zh_CN": "应用已退出或 PID 已被复用",
+    "zh_TW": "應用已退出或 PID 已被重用"
+  },
+  "Scheduler": {
+    "en": "Scheduler",
+    "zh_CN": "调度器",
+    "zh_TW": "排程器"
+  },
+  "Fan profile": {
+    "en": "Fan profile",
+    "zh_CN": "风扇策略",
+    "zh_TW": "風扇策略"
+  },
+  "Fan sensor": {
+    "en": "Fan sensor",
+    "zh_CN": "风扇传感",
+    "zh_TW": "風扇感測"
+  },
+  "Active cooling": {
+    "en": "Active cooling",
+    "zh_CN": "强散热",
+    "zh_TW": "強散熱"
+  },
+  "Existing curve": {
+    "en": "Existing curve",
+    "zh_CN": "现有曲线",
+    "zh_TW": "既有曲線"
+  },
+  "Lighting mode": {
+    "en": "Lighting mode",
+    "zh_CN": "氛围灯模式",
+    "zh_TW": "氛圍燈模式"
+  },
+  "Choose lighting color": {
+    "en": "Choose lighting color",
+    "zh_CN": "选择氛围灯颜色",
+    "zh_TW": "選擇氛圍燈顏色"
+  },
+  "Lighting color": {
+    "en": "Lighting color",
+    "zh_CN": "氛围灯颜色",
+    "zh_TW": "氛圍燈顏色"
+  },
+  "Lighting brightness": {
+    "en": "Lighting brightness",
+    "zh_CN": "氛围灯亮度",
+    "zh_TW": "氛圍燈亮度"
+  },
+  "Main display brightness": {
+    "en": "Main display brightness",
+    "zh_CN": "主屏幕亮度",
+    "zh_TW": "主螢幕亮度"
+  },
+  "Secondary display brightness": {
+    "en": "Secondary display brightness",
+    "zh_CN": "副屏幕亮度",
+    "zh_TW": "副螢幕亮度"
+  },
+  "Move active app to other display": {
+    "en": "Move active app to other display",
+    "zh_CN": "移动当前应用到另一屏幕",
+    "zh_TW": "移動目前應用到另一螢幕"
+  },
+  "Back button": {
+    "en": "Back button",
+    "zh_CN": "返回键",
+    "zh_TW": "返回鍵"
+  },
+  "Home button": {
+    "en": "Home button",
+    "zh_CN": "主页键",
+    "zh_TW": "首頁鍵"
+  },
+  " command": {
+    "en": " command",
+    "zh_CN": "命令",
+    "zh_TW": "指令"
+  },
+  "Partition": {
+    "en": "Partition",
+    "zh_CN": "分区",
+    "zh_TW": "分區"
+  },
+  "Query Android partitions": {
+    "en": "Query Android partitions",
+    "zh_CN": "查询 Android 分区",
+    "zh_TW": "按查詢讀取 Android 分區"
+  },
+  "Query": {
+    "en": "Query",
+    "zh_CN": "查询",
+    "zh_TW": "查詢"
+  },
+  "Mount read-only": {
+    "en": "Mount read-only",
+    "zh_CN": "只读挂载",
+    "zh_TW": "唯讀掛載"
+  },
+  "Unmount": {
+    "en": "Unmount",
+    "zh_CN": "卸载",
+    "zh_TW": "卸載"
+  },
+  "Open Android folder": {
+    "en": "Open Android folder",
+    "zh_CN": "打开 Android 目录",
+    "zh_TW": "開啟 Android 目錄"
+  },
+  "Previous group": {
+    "en": "Previous group",
+    "zh_CN": "上一组",
+    "zh_TW": "上一組"
+  },
+  "Next group": {
+    "en": "Next group",
+    "zh_CN": "下一组",
+    "zh_TW": "下一組"
+  },
+  "Error: ": {
+    "en": "Error: ",
+    "zh_CN": "错误：",
+    "zh_TW": "錯誤："
+  },
+  "Invalid response: ": {
+    "en": "Invalid response: ",
+    "zh_CN": "回复格式错误：",
+    "zh_TW": "回覆格式錯誤："
+  },
+  "Settings applied": {
+    "en": "Settings applied",
+    "zh_CN": "已应用设置",
+    "zh_TW": "已套用設定"
+  },
+  "Applying…": {
+    "en": "Applying…",
+    "zh_CN": "正在应用…",
+    "zh_TW": "正在套用…"
+  },
+  "Desktop auto lock updated": {
+    "en": "Desktop auto lock updated",
+    "zh_CN": "已设置桌面自动锁定",
+    "zh_TW": "已設定桌面自動鎖定"
+  },
+  "Connected · AYN toggles control panel": {
+    "en": "Connected · AYN toggles control panel",
+    "zh_CN": "已连接 · AYN 键切换中控",
+    "zh_TW": "服務已連線 · AYN 鍵切換中控"
+  },
+  "Connected · Gamepad service unavailable": {
+    "en": "Connected · Gamepad service unavailable",
+    "zh_CN": "已连接 · 手柄服务尚未就绪",
+    "zh_TW": "服務已連線 · 手柄服務尚未就緒"
+  },
+  "Connecting to hardware service…": {
+    "en": "Connecting to hardware service…",
+    "zh_CN": "连接硬件服务…",
+    "zh_TW": "連線到硬體服務…"
+  },
+  "Waiting for game": {
+    "en": "Waiting for game",
+    "zh_CN": "等待游戏",
+    "zh_TW": "等待遊戲"
+  },
+  "Cannot start: ": {
+    "en": "Cannot start: ",
+    "zh_CN": "无法启动：",
+    "zh_TW": "無法啟動："
+  },
+  " exit code ": {
+    "en": " exit code ",
+    "zh_CN": " 退出码 ",
+    "zh_TW": " 結束碼 "
+  },
+  "No Android partitions found": {
+    "en": "No Android partitions found",
+    "zh_CN": "未找到 Android 分区",
+    "zh_TW": "未找到 Android 分區"
+  },
+  "Read-only mounting available": {
+    "en": "Read-only mounting available",
+    "zh_CN": "可只读挂载",
+    "zh_TW": "可唯讀掛載"
+  },
+  "super logical partition": {
+    "en": "super logical partition",
+    "zh_CN": "super 逻辑分区",
+    "zh_TW": "super 邏輯分區"
+  },
+  "FPS controls require MangoHud-wrapped OpenGL/Vulkan games.": {
+    "en": "FPS controls require MangoHud-wrapped OpenGL/Vulkan games.",
+    "zh_CN": "FPS 限制与浮层适用于 MangoHud 包装的 OpenGL／Vulkan 游戏。",
+    "zh_TW": "FPS 限制與浮層適用於 MangoHud 包裝的 OpenGL／Vulkan 遊戲。"
+  },
+  "Command: aynthor-control --run PROGRAM [ARGS]": {
+    "en": "Command: aynthor-control --run PROGRAM [ARGS]",
+    "zh_CN": "命令行：aynthor-control --run 游戏程序 [参数]",
+    "zh_TW": "命令列：aynthor-control --run 遊戲程式 [參數]"
+  },
+  "MangoHud automatically reloads settings while running.": {
+    "en": "MangoHud automatically reloads settings while running.",
+    "zh_CN": "运行中设置由 MangoHud 自动重新加载。",
+    "zh_TW": "執行中設定會由 MangoHud 自動重新載入。"
+  },
+  "Close": {
+    "en": "Close",
+    "zh_CN": "关闭",
+    "zh_TW": "關閉"
+  },
+  "Force close": {
+    "en": "Force close",
+    "zh_CN": "强制关闭",
+    "zh_TW": "強制關閉"
+  },
+  "Simplified Chinese": {
+    "en": "Simplified Chinese",
+    "zh_CN": "简体中文",
+    "zh_TW": "簡體中文"
+  },
+  "Traditional Chinese": {
+    "en": "Traditional Chinese",
+    "zh_CN": "繁体中文",
+    "zh_TW": "繁體中文"
+  },
+  "Open on top screen": {
+    "en": "Open on top screen",
+    "zh_CN": "在上屏打开",
+    "zh_TW": "在上屏開啟"
+  },
+  "Open on bottom screen": {
+    "en": "Open on bottom screen",
+    "zh_CN": "在下屏打开",
+    "zh_TW": "在下屏開啟"
+  }
+}

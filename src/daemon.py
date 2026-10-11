@@ -9,6 +9,7 @@ import math
 import os
 import re
 import select
+import signal
 import struct
 import sys
 import threading
@@ -105,7 +106,10 @@ class Hardware(dbus.service.Object):
         GLib.timeout_add_seconds(2,self.touchpad_watchdog)
         bus.add_signal_receiver(self.touchpad_owner_changed,signal_name='NameOwnerChanged',
                                 dbus_interface='org.freedesktop.DBus',bus_name='org.freedesktop.DBus')
-        self.cpu_previous = (0, 0)
+        self.cpu_previous = None
+        self.gpu_previous = {}; self.gpu_sample_time = 0; self.gpu_percent = None
+        self.io_previous = {'network':{},'disk_io':{}}; self.io_times = {'network':0,'disk_io':0}; self.io_rates = {'network':{},'disk_io':{}}
+        self.monitoring = {'items':[],'modes':{}}
         self.tach_previous = None
         self.tach_rpm = None
         self.mutation_lock = threading.Lock()
@@ -656,12 +660,13 @@ class Hardware(dbus.service.Object):
 
     def userdata_status(self, device):
         base = STATE.parent/'android'
-        helper = base/'test-thor-metadata-unlock.sh'
+        helper = Path('/usr/lib/aynthor/userdata-mount')
         release = os.uname().release
-        ready = (release == '7.1.2-thorch19' and helper.is_file()
+        ready = (helper.is_file() and Path('/usr/bin/modinfo').is_file()
                  and (base/'keymint-private/metadata.keyblob').is_file()
                  and all((base/'keymint-runtime'/name).is_file() for name in ('bin/linker64','bin/native-convert','lib64/conversion-compat.so','lib64/libaynthor-mink-bridge.so'))
-                 and all((base/'tme-modules'/release/(name+'.ko')).is_file()
+                 and all(Path('/sys/module',name).is_dir() or (base/'tme-modules'/release/(name+'.ko')).is_file()
+                         or subprocess.run(['modinfo','-n',name],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode == 0
                          for name in ('aynthor_qmp','tme_overlay_loader','aynthor_tme')))
         state = run('systemctl','show','aynthor-userdata-mount.service','-p','ActiveState','--value')
         mount = subprocess.run(['findmnt','-rn','-M','/mnt/android-data','-o','FSTYPE'],capture_output=True,text=True)
@@ -687,11 +692,13 @@ class Hardware(dbus.service.Object):
                     run('blockdev','--setrw',device)
                     run('systemd-run','--unit=aynthor-userdata-mount','--collect',
                         '--property=TimeoutStopSec=90','--property=LimitCORE=0',
-                        '/bin/bash',str(STATE.parent/'android/test-thor-metadata-unlock.sh'),'--mount-user0-rw')
+                        '/bin/bash','/usr/lib/aynthor/userdata-mount','--mount-user0-rw')
                     for _ in range(80):
                         if self.userdata_status(device)['mounted']: break
                         time.sleep(.5)
-                    else: raise ValueError('Userdata mount is not ready; inspect backend service state')
+                    else:
+                        details = run('journalctl','-u','aynthor-userdata-mount.service','-n','8','--no-pager','-o','cat')
+                        raise ValueError('Userdata mount is not ready: '+details)
                     self.userdata_view(uid)
                 else:
                     view=subprocess.run(['findmnt','-rn','-M','/mnt/aynthor-android/userdata','-o','FSTYPE'],capture_output=True,text=True)
@@ -777,6 +784,7 @@ class Hardware(dbus.service.Object):
 
     def collect_status(self):
         try:
+            monitoring=self.monitoring; active=set(monitoring['items']); modes=monitoring['modes']
             now = time.monotonic()
             stamp = Path('/etc/thorch/hardware.conf').stat().st_mtime_ns
             if self.hardware_status is None or stamp != self.hardware_config_stamp or now-self.hardware_status_time >= 15:
@@ -797,37 +805,84 @@ class Hardware(dbus.service.Object):
                 scale = (number(node/'brightness') or 0)/(number(node/'max_brightness') or 255)
                 data['lighting_output'][key] = [round(channels.get(c,0)*scale) for c in ('red','green','blue')]
             battery = '/sys/class/power_supply/battery/'
-            data['battery'] = {key: number(battery + key, scale) for key, scale in [('capacity', 1), ('temp', 10), ('current_now', 1e6), ('voltage_now', 1e6)]}
+            data['battery'] = {'capacity':number(battery+'capacity'),'temp':None,'current_now':None,'voltage_now':None}
+            if 'battery' in active:
+                data['battery'].update({key:number(battery+key,scale) for key,scale in [('temp',10),('current_now',1e6),('voltage_now',1e6)]})
             data['battery']['status'] = read(battery + 'status')
             data['battery']['charge_type'] = read(battery+'charge_type','Unknown')
             usb=Path('/sys/class/power_supply/qcom-battmgr-usb')
             protocol=re.search(r'\[([^]]+)\]',read(usb/'usb_type',''))
             data['battery']['charging_protocol'] = protocol.group(1) if protocol else 'Unknown'
-            data['battery']['fast_charging'] = data['battery']['status'] == 'Charging' and (data['battery']['charging_protocol'] in ('PD','PD_PPS') or (number(usb/'voltage_now') or 0) > 5500000)
-            data['temperature_sensors'] = [{'id':read(p/'type',p.name),'name':read(p/'type',p.name),'temperature':number(p/'temp',1000)} for p in sorted(Path('/sys/class/thermal').glob('thermal_zone*'),key=lambda p:int(p.name.removeprefix('thermal_zone')))]
+            data['battery']['charger_connected'] = bool(number(usb/'online'))
+            data['battery']['fast_charging'] = data['battery']['charger_connected'] and (data['battery']['charging_protocol'] in ('PD','PD_PPS') or (number(usb/'voltage_now') or 0) > 5500000)
+            data['temperature_sensors'] = [{'id':read(p/'type',p.name),'name':read(p/'type',p.name),'temperature':number(p/'temp',1000)} for p in sorted(Path('/sys/class/thermal').glob('thermal_zone*'),key=lambda p:int(p.name.removeprefix('thermal_zone')))] if 'temperature' in active else []
             # power_now is inconsistent on this BSP; derive watts from voltage and current.
             current = data['battery']['current_now']
             voltage = data['battery']['voltage_now']
-            data['battery']['watts'] = abs(current * voltage) if current is not None and voltage is not None else None
-            data['cpu_mhz'] = max((number(p, 1000) or 0 for p in Path('/sys/devices/system/cpu/cpufreq').glob('policy*/scaling_cur_freq')), default=0)
-            data['gpu_mhz'] = number('/sys/class/devfreq/3d00000.gpu/cur_freq', 1e6)
-            hwmon = [p for p in Path('/sys/class/hwmon').glob('*') if read(p / 'name') == 'pwmfan']
+            # This BSP reports battery current positive into, negative out of the battery.
+            data['battery']['watts'] = current * voltage if current is not None and voltage is not None else None
+            data['cpu_mhz'] = max((number(p, 1000) or 0 for p in Path('/sys/devices/system/cpu/cpufreq').glob('policy*/scaling_cur_freq')), default=0) if 'cpu' in active and modes.get('cpu') != 'percent' else None
+            data['gpu_mhz'] = number('/sys/class/devfreq/3d00000.gpu/cur_freq', 1e6) if 'gpu' in active and modes.get('gpu') != 'percent' else None
+            now = time.monotonic()
+            if 'gpu' not in active or modes.get('gpu') != 'percent':
+                self.gpu_previous={}; self.gpu_sample_time=0; self.gpu_percent=None
+            elif now-self.gpu_sample_time >= 1:
+                clients = {}
+                for fd in Path('/proc').glob('[0-9]*/fd/*'):
+                    try:
+                        if not os.readlink(fd).startswith('/dev/dri/'): continue
+                        fields = dict(line.split(':',1) for line in (fd.parent.parent/'fdinfo'/fd.name).read_text().splitlines() if ':' in line)
+                        if fields.get('drm-driver','').strip() != 'msm' or 'drm-engine-gpu' not in fields: continue
+                        client = fields['drm-client-id'].strip()
+                        busy = int(fields['drm-engine-gpu'].split()[0])
+                        clients[client] = max(clients.get(client,0),busy)
+                    except (OSError,ValueError,KeyError): continue
+                elapsed = now-self.gpu_sample_time
+                busy_delta = sum(max(0,value-self.gpu_previous[key]) for key,value in clients.items() if key in self.gpu_previous)
+                self.gpu_percent = max(0,min(100,100*busy_delta/(elapsed*1e9))) if self.gpu_sample_time and clients else None
+                self.gpu_previous = clients; self.gpu_sample_time = now
+            data['gpu_percent'] = self.gpu_percent
+            data['load_average'] = list(os.getloadavg()) if 'load' in active else []
+            for section in ('network','disk_io'):
+                if section not in active:
+                    self.io_previous[section]={}; self.io_times[section]=0; self.io_rates[section]={}; continue
+                if now-self.io_times[section]<1: continue
+                counters={}; disks={}
+                if section == 'network':
+                    for line in Path('/proc/net/dev').read_text().splitlines()[2:]:
+                        name,values=line.split(':',1); values=values.split(); counters[name.strip()]=(int(values[0]),int(values[8]))
+                else:
+                    disks={p.name:p for p in Path('/sys/block').iterdir() if not p.name.startswith(('loop','ram','zram'))}
+                    for line in Path('/proc/diskstats').read_text().splitlines():
+                        values=line.split()
+                        if len(values)>=10 and values[2] in disks: counters[values[2]]=(int(values[5])*512,int(values[9])*512)
+                elapsed=now-self.io_times[section]; rates={}
+                for name,values in counters.items():
+                    previous=self.io_previous[section].get(name)
+                    rates[name]=[max(0,current-old)/elapsed for current,old in zip(values,previous)] if previous is not None and self.io_times[section] else [None,None]
+                members=[name for name in rates if name != 'lo'] if section == 'network' else [name for name in rates if (disks[name]/'device').exists()]
+                rates['all']=[sum(rates[name][index] for name in members if rates[name][index] is not None) if self.io_times[section] else None for index in (0,1)]
+                self.io_rates[section]=rates; self.io_previous[section]=counters; self.io_times[section]=now
+            data.update(self.io_rates)
+            hwmon = [p for p in Path('/sys/class/hwmon').glob('*') if read(p / 'name') == 'pwmfan'] if 'fan' in active else []
             data['fan_rpm'], data['fan_percent'], data['fan_rpm_source'] = self.fan_reading(hwmon[0]) if hwmon else (None,None,'unavailable')
-            data['cpu_max_mhz'] = max((number(p,1000) or 0 for p in Path('/sys/devices/system/cpu/cpufreq').glob('policy*/cpuinfo_max_freq')),default=3200)
-            data['gpu_max_mhz'] = number('/sys/class/devfreq/3d00000.gpu/max_freq',1e6)
+            data['cpu_max_mhz'] = max((number(p,1000) or 0 for p in Path('/sys/devices/system/cpu/cpufreq').glob('policy*/cpuinfo_max_freq')),default=3200) if 'cpu' in active and modes.get('cpu') != 'percent' else None
+            data['gpu_max_mhz'] = number('/sys/class/devfreq/3d00000.gpu/max_freq',1e6) if 'gpu' in active and modes.get('gpu') != 'percent' else None
             mode_governors = {'quiet':('powersave','powersave'), 'standard':('schedutil','simple_ondemand'), 'performance':('performance','performance')}
             if (data['cpu_governor'],data['gpu_governor']) != mode_governors.get(data['performance']):
                 data['performance'] = 'custom'
             data['cpu_governor_actual'] = read('/sys/devices/system/cpu/cpufreq/policy0/scaling_governor')
             data['gpu_governor_actual'] = read('/sys/class/devfreq/3d00000.gpu/governor')
-            mem = {line.split(':')[0]: int(line.split()[1]) for line in Path('/proc/meminfo').read_text().splitlines() if len(line.split()) > 1 and line.split()[1].isdigit()}
-            data['ram_used_gb'] = (mem['MemTotal'] - mem['MemAvailable']) / 1048576
-            data['ram_total_gb'] = mem['MemTotal'] / 1048576
-            fields = list(map(int, Path('/proc/stat').read_text().splitlines()[0].split()[1:9]))
-            total, idle = sum(fields), fields[3] + fields[4]
-            old_total, old_idle = self.cpu_previous
-            data['cpu_percent'] = 100 * (1 - (idle-old_idle)/(total-old_total)) if total > old_total else 0
-            self.cpu_previous = total, idle
+            data['ram_used_gb']=None; data['ram_total_gb']=None; data['cpu_percent']=None
+            if 'memory' in active:
+                mem = {line.split(':')[0]: int(line.split()[1]) for line in Path('/proc/meminfo').read_text().splitlines() if len(line.split()) > 1 and line.split()[1].isdigit()}
+                data['ram_used_gb'] = (mem['MemTotal'] - mem['MemAvailable']) / 1048576; data['ram_total_gb'] = mem['MemTotal'] / 1048576
+            if 'cpu' in active and modes.get('cpu') == 'percent':
+                fields = list(map(int, Path('/proc/stat').read_text().splitlines()[0].split()[1:9])); total, idle = sum(fields), fields[3] + fields[4]
+                if self.cpu_previous is not None:
+                    old_total,old_idle=self.cpu_previous; data['cpu_percent']=100*(1-(idle-old_idle)/(total-old_total)) if total>old_total else 0
+                self.cpu_previous=total,idle
+            else: self.cpu_previous=None
             data['backlight'] = {name: {'value': number('/sys/class/backlight/' + node + '/brightness'), 'max': number('/sys/class/backlight/' + node + '/max_brightness')} for name, node in [('bottom', 'ae94000.dsi.0'), ('top', 'ae96000.dsi.0')]}
             data['bypass_supported'] = False
             data['bypass_reason'] = 'This kernel exposes charge thresholds but no verified bypass charging switch'
@@ -840,6 +895,16 @@ class Hardware(dbus.service.Object):
             return self.cached_status
         except (RuntimeError, OSError, ValueError) as e:
             raise dbus.exceptions.DBusException(str(e), name=NAME + '.Failed')
+
+    @dbus.service.method(NAME, in_signature='s', out_signature='')
+    def SetMonitoring(self,raw):
+        config=json.loads(raw); known={'cpu','gpu','temperature','fan','memory','battery','load','network','disk_io'}
+        self.monitoring={'items':[key for key in config.get('items',[]) if isinstance(key,str) and key in known],'modes':{key:config.get('modes',{}).get(key,'mhz') for key in ('cpu','gpu')}}
+
+    @dbus.service.method(NAME, in_signature='s', out_signature='s')
+    def MonitoringDevices(self,kind):
+        root=Path('/sys/class/net') if kind == 'network' else Path('/sys/block')
+        return json.dumps(sorted(p.name for p in root.iterdir() if kind == 'network' or not p.name.startswith(('loop','ram','zram'))))
 
     @dbus.service.method(NAME, in_signature='', out_signature='s', async_callbacks=('reply','error'))
     def Status(self, reply=None, error=None):
@@ -938,8 +1003,28 @@ class Hardware(dbus.service.Object):
                 config.write_text(content,encoding='utf-8')
         self.prefs.update(mangohud_mode=mode,mangohud_limit=limit,mangohud_hud=hud)
 
+    def kill_task(self,pid,started,uid):
+        if pid <= 1 or pid == os.getpid(): raise ValueError('Invalid task')
+        handle = os.pidfd_open(pid)
+        try:
+            process = Path('/proc')/str(pid)
+            if process.joinpath('stat').read_text().rsplit(')',1)[1].split()[19] != started:
+                raise ValueError('Task has already exited')
+            owner = process.stat().st_uid
+            if owner != uid:
+                environment = process.joinpath('environ').read_bytes().split(b'\0')
+                if owner != 0 or f'user-{uid}.slice' not in process.joinpath('cgroup').read_text() or not any(item.startswith((b'DISPLAY=',b'WAYLAND_DISPLAY=')) for item in environment):
+                    raise ValueError('Task is outside your graphical session')
+            signal.pidfd_send_signal(handle,signal.SIGKILL)
+        finally:
+            os.close(handle)
+
     def apply(self, operation, values, uid=0):
         operation, values = str(operation), list(map(str, values))
+        if operation == 'kill-task':
+            if len(values) != 2: raise ValueError('Invalid task arguments')
+            self.kill_task(int(values[0]),values[1],uid)
+            return self.quick_status()
         self.hardware_status = None
         if operation.startswith(('rgb-','lighting-')):
             with self.led_lock: self.led_written.clear()
