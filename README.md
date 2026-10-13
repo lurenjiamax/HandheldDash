@@ -1,5 +1,5 @@
 ### Intro
-**HandheldDash** is a touch-friendly handheld control panel and a system D-Bus hardware daemon for Arch Linux with KDE Plasma/Wayland. It currently supports and has been tested only on **AYN Thor running the Thorch BSP**; support for other handhelds is planned. [中文文档](README.zh-CN.md). 
+**HandheldDash** is a touch-friendly control panel with a system D-Bus hardware service. The verified target is **AYN Thor running the Thorch BSP and KWin**. [Chinese documentation](README.zh-CN.md).
 <img src="docs/images/control-panel.png" alt="HandheldDash control panel on AYN Thor" width="620">
 ### Feature
 
@@ -14,9 +14,15 @@
 The daemon lets an active local user operate supported hardware without running the interface as root. [Features and limits](docs/features.md).
 
 ### Limitations
+Gamepad focus only asks KWin to activate a window on the selected screen when controller activity is detected; it does **not** isolate or route gamepad input. Games reading SDL/evdev devices directly may respond simultaneously regardless of desktop focus. “Automatic” leaves focus unchanged. This feature depends on KWin and the recognized controller; reliable two-game input isolation has not been validated.
+
+Gamepad/Mouse mode loads the system-installed InputPlumber profiles (`/usr/share/inputplumber/profiles/default.yaml` and `mouse_keyboard_wasd.yaml`) and adds HandheldDash button mappings at runtime. These base profiles are supplied by the system's InputPlumber installation, **not bundled with HandheldDash**; the supported Thorch setup must provide them and a compatible controller configuration.
+
 Android partition access require custom kernel and is **extremely experimental: it may not work and may even prevent Android from booting**. 
 
 Wider device support is planned; unsupported controller layouts and bypass charging are to be supported by upstream driver. 
+
+UI, application services, desktop adapters and hardware integrations have separate modules. Other desktop sessions use capability-limited fallback. See [project structure and package deployment](docs/portability.md).
 ### Install
 
 On a compatible Thorch installation, download lateset release from [Releases](https://github.com/lurenjiamax/HandheldDash/releases), 

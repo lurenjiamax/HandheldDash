@@ -1,11 +1,10 @@
 [Unit]
-Description=AYN Thor control panel and hardware key listener
+Description=HandheldDash control panel and hardware key listener
 After=graphical-session-pre.target
 PartOf=graphical-session.target
 
 [Service]
 ExecStart=/usr/bin/aynthor-control --background
-Environment=QT_QPA_PLATFORM=wayland
 Restart=on-failure
 RestartSec=2
 

@@ -1,0 +1,29 @@
+{
+  "identity": "ayn-thor",
+  "backend": "thorch",
+  "models": ["AYN Thor"],
+  "displays": {"top": "DSI-2", "bottom": "DSI-1"},
+  "backlights": {"bottom": "ae94000.dsi.0", "top": "ae96000.dsi.0"},
+  "gpu": "/sys/class/devfreq/3d00000.gpu",
+  "gpu_utilization": "msm-drm",
+  "battery": "/sys/class/power_supply/battery",
+  "charger": "/sys/class/power_supply/qcom-battmgr-usb",
+  "hardware_control": "/usr/bin/thorch-hardwarectl",
+  "hardware_config": "/etc/thorch/hardware.conf",
+  "fan_control": "/usr/bin/thorch-fancontrol",
+  "fan_service": "thorch-fancontrol.service",
+  "composite_match": "AYN",
+  "profile_prefix": "AYN Thor",
+  "irq_cpu_sets": {"powersave": [0, 1, 2], "performance": [7]},
+  "hotkey_devices": ["Thorch Hardware Keys", "Microsoft Xbox Series S|X Controller"],
+  "led_patterns": {"l": "rgb:l[0-9]*", "r": "rgb:r[0-9]*"},
+  "performance_modes": {
+    "quiet": ["powersave", "powersave", "quiet", "off"],
+    "standard": ["schedutil", "simple_ondemand", "moderate", "on"],
+    "performance": ["performance", "performance", "aggressive", "on"]
+  },
+  "touchscreen": "bottom_touchscreen",
+  "touchscreen_reset": "1-0038",
+  "fan_name": "pwmfan",
+  "fan_reset_workaround": true
+}

@@ -5,6 +5,6 @@ Name[zh_TW]=HandheldDash
 Comment=Hardware controls, game dashboard and key settings
 Exec=aynthor-control
 Icon=input-gaming
-Categories=Settings;HardwareSettings;Game;
+Categories=Game;
 Terminal=false
 StartupWMClass=org.aynthor.Control
