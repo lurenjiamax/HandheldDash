@@ -13,8 +13,17 @@ jobs:
     container: archlinux:latest
     steps:
       - name: Install packaging tools
-        run: pacman -Syu --noconfirm --needed base-devel git
+        run: pacman -Syu --noconfirm --needed base-devel git python
       - uses: actions/checkout@v4
+      - name: Validate Python syntax and translation catalog
+        run: |
+          python - <<'PY'
+          import ast, json
+          from pathlib import Path
+          for path in Path('src').rglob('*.py'):
+              ast.parse(path.read_text(encoding='utf-8'), filename=str(path))
+          json.loads(Path('packaging/translations.json').read_text(encoding='utf-8'))
+          PY
       - name: Build Arch package
         env:
           HANDHELDDASH_REF: commit=${{ github.sha }}
@@ -27,6 +36,10 @@ jobs:
           chown -R builder:builder "$GITHUB_WORKSPACE"
           # Runtime dependencies include Thor-only BSP packages unavailable in generic Arch.
           runuser -u builder -- env HANDHELDDASH_REF="$HANDHELDDASH_REF" makepkg --nodeps --force
+          # Verify new UI modules are actually in the distributable package.
+          tar -tf ./*.pkg.tar.zst > package-files.txt
+          grep -Fx 'usr/lib/aynthor/handhelddash/ui/widgets/affinity.py' package-files.txt
+          grep -Fx 'usr/lib/aynthor/handhelddash/ui/widgets/paging.py' package-files.txt
           sha256sum ./*.pkg.tar.zst > SHA256SUMS
           runuser -u builder -- makepkg --printsrcinfo > .SRCINFO
       - uses: actions/upload-artifact@v4

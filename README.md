@@ -38,7 +38,7 @@ sudo systemctl enable --now inputplumber.service aynthor-hardwared.service
 systemctl --user enable --now aynthor-control.service
 ```
 
-Press the AYN key to toggle the panel. Or run `handhelddash`, open `handhelddash --settings`, or  [Installation, upgrades and source builds](docs/installation.md). **FPS collection is limited to applications launched with MangoHud. Emulators must be explicitly launched through MangoHud**, for example `mangohud eden`; launching the emulator normally does not enable FPS collection. Taking over the MangoHud configuration does not load MangoHud into an application.
+Press the AYN key to toggle the panel. Or run `handhelddash`, open `handhelddash --settings`, or see [Installation, upgrades and source builds](docs/installation.md). FPS limits and the optional in-game overlay require explicitly launching applications through MangoHud, for example `mangohud eden`. The dashboard does not collect or display FPS. Taking over the MangoHud configuration does not load MangoHud into an application.
 
 ### License
 Original project code is licensed under **LGPL-3.0-or-later**; see [LICENSE](LICENSE) and [COPYING](COPYING). Vendored lpunpack, Tabler and Lucide icons retain their LGPL, MIT and ISC notices; dependencies retain their own licenses, including PyQt6's GPL/commercial terms.

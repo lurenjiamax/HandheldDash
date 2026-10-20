@@ -21,6 +21,10 @@ class KDEAdapter(DesktopAdapter):
     def install_placement(self, prefs, displays):
         return self._window('install_placement', prefs, displays)
 
+    def show_panel(self): return self._window('show_panel')
+
+    def hide_panel(self): return self._window('hide_panel')
+
     def focus_touchpad(self, output, active):
         return self._window('focus_touchpad', output, active)
 

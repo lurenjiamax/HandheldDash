@@ -1,5 +1,4 @@
 post_install() {
-  systemd-tmpfiles --create /usr/lib/tmpfiles.d/handhelddash-fps.conf
   printf '%s\n' 'HandheldDash: enable inputplumber.service and aynthor-hardwared.service as root.' \
     'In your graphical session: systemctl --user enable --now aynthor-control.service' \
     'AYN Thor is the verified device adapter. Other devices and desktops have capability-limited fallback. See /usr/share/doc/handhelddash/docs/portability.md.'

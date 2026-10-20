@@ -2,7 +2,6 @@
 from handhelddash.ui.common import DATA
 from handhelddash.ui.common import DEVICE
 from handhelddash.ui.common import Path
-from handhelddash.ui.common import csv
 from handhelddash.ui.common import dashboard_layout
 from handhelddash.ui.common import json
 from handhelddash.ui.common import time
@@ -139,20 +138,3 @@ class StatusPresenterMixin:
             self.status_busy = True
             revision = self.write_revision
             self.call('Status',[],lambda raw:self.update_state(raw) if revision == self.write_revision else None,True)
-        configuration=self.dashboard_draft if self.dashboard_editing else dashboard_layout(self.prefs.get('dashboard_layout'))
-        files = [p for folder in (DATA/'fps',Path('/var/cache/handhelddash/fps')) if folder.is_dir() for p in folder.glob('*.csv')] if configuration.get('show_fps',True) else []
-        files = [p for p in files if not p.name.endswith('_summary.csv') and time.time()-p.stat().st_mtime < 4]
-        self.fps.setText('— FPS'); self.fps_source.setText('')
-        if files:
-            latest = max(files,key=lambda p:p.stat().st_mtime)
-            try:
-                with latest.open('rb') as f:
-                    f.seek(max(0,latest.stat().st_size-8192))
-                    lines = f.read().decode(errors='replace').splitlines()
-                for line in reversed(lines):
-                    columns = next(csv.reader([line]))
-                    if len(columns) > 5 and columns[0].replace('.','',1).isdigit():
-                        self.fps.setText(f'{float(columns[0]):.0f} FPS')
-                        self.fps_source.setText(latest.name.split('_')[0]); break
-            except (OSError,ValueError,IndexError): pass
-

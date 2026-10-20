@@ -13,6 +13,10 @@ class DesktopAdapter(QObject):
     def supports(self, feature: str) -> bool:
         return feature in self.capabilities
 
+    def show_panel(self): return False
+
+    def hide_panel(self): return False
+
     def install_placement(self, prefs: dict, displays: dict):
         return False
 

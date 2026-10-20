@@ -66,14 +66,16 @@ class SettingsPageMixin:
             combo.setCurrentIndex(combo.findData(self.prefs[key])); combo.activated.connect(lambda i,k=key,c=combo:self.set_button_action(k,c.currentData())); form.addRow(QLabel(label),combo)
             command = QLineEdit(self.prefs[key+'_command']); command.setPlaceholderText('Custom command, e.g. konsole')
             command.editingFinished.connect(lambda k=key,c=command:self.set_pref(k+'_command',c.text())); form.addRow(QLabel(label+' command'),command)
-        form = group('Android')
+        form = group('Android'); self.android_settings_index=self.settings_stack.count()-1
         warning = QLabel('Extremely experimental: this may not work at all and may even prevent the Android partition from booting.'); warning.setWordWrap(True); warning.setStyleSheet('color:#ffb176; font-weight:600;'); form.addRow(warning)
         self.android_parts = []
         self.android_combo = Choice(); self.android_combo.currentIndexChanged.connect(self.describe_android); form.addRow(QLabel('Partition'),self.android_combo)
         self.android_label = QLabel('Query Android partitions'); self.android_label.setWordWrap(True); form.addRow(self.android_label)
         row = QHBoxLayout(); row.addWidget(self.button('Query',self.refresh_android)); self.android_mount=self.button('Mount read-only',lambda:self.android_action('mount-android')); row.addWidget(self.android_mount); row.addWidget(self.button('Unmount',lambda:self.android_action('unmount-android'))); form.addRow(row)
         form.addRow(self.button('Open Android folder',self.open_android))
-        self.android_timer=QTimer(self); self.android_timer.setInterval(2000); self.android_timer.timeout.connect(lambda:self.refresh_android() if self.isVisible() else None); self.android_timer.start()
+        self.android_timer=QTimer(self); self.android_timer.setInterval(10000)
+        self.android_timer.timeout.connect(lambda:self.refresh_android() if self.isVisible() and self.tabs.currentIndex()==self.settings_index and self.settings_stack.currentIndex()==self.android_settings_index else None)
+        self.android_timer.start()
         form = group('Language')
         language = Choice()
         for text,value in [('System language','system'),('English','en'),('Simplified Chinese','zh_CN'),('Traditional Chinese','zh_TW')]: language.addItem(text,value)
@@ -184,7 +186,7 @@ class SettingsPageMixin:
         if key == 'back-home': self.set('navigation-chord',[value])
 
     def set_fps_limit(self,value):
-        self.set_pref('fps_limit',value); self.update_mangohud()
+        self.set_pref('fps_limit',value); self.fps_mode.show_value(value); self.update_mangohud()
 
     def set_hud(self,value):
         self.set_pref('hud',value); self.update_mangohud()
@@ -201,4 +203,3 @@ class SettingsPageMixin:
                     self.notify(reply.errorMessage()); self.set_autolock(False); return
                 self.caffeine_cookies.append((interface,reply.arguments()[0]))
         self.set_pref('caffeine_enabled',bool(value)); self.autolock.show_value(bool(value))
-

@@ -1,38 +1,31 @@
-HandheldDash 1.2.0 introduces a customizable control dashboard for AYN Thor
-running the Thorch BSP on Arch Linux with KDE Plasma/Wayland.
+HandheldDash 1.3.0 improves touch controls and reduces background work on AYN Thor
+running the Thorch BSP with KDE Plasma/Wayland.
 
-- Two wide cards and ten compact control slots, with centered content and
-  improved wrapping for long English labels. All cards can be moved or removed.
-- Unified editing for control and monitoring cards: tap-select/swap, drag to
-  reorder, and long-press object menus. Pencil enters editing, plus adds cards,
-  and the checkmark saves the draft.
-- Optional system-load, network-speed and disk-IO monitoring, with interface or
-  disk selection and aggregate modes. CPU/GPU cards independently select
-  utilization or current / maximum MHz.
-- Only selected monitoring cards request sampling. GPU utilization uses real
-  MSM DRM engine counters; inactive samplers, fan animations and FPS CSV scans
-  are stopped. Missing measurements are not replaced with fabricated values.
-- Bounded, theme-aware brightness and volume popups that dismiss on outside
-  taps. Screen controls live in the brightness popup; the integrated speaker
-  icon toggles mute. Move-current-app is an independent control card.
-- Native Plasma Mobile status-bar visibility and Docked Mode settings. The
-  lower-screen status bar is resolved by actual DSI-1 geometry, not Qt screen
-  enumeration. Docked Mode is a global Plasma Mobile setting.
-- JSON translation catalogs, refreshed vector icons, KDE application-menu
-  screen actions, and an updated English dashboard screenshot.
-- Signed net battery power: discharge carries a minus sign, charging does not.
-  Fast/slow charging labels describe the connected charging source, not a
-  separately measured adapter-input wattage.
+- Touch-only CPU affinity in the Tasks long-press menu. Select individual cores
+  or capacity tiers; each core shows its hardware maximum frequency. Apply updates
+  existing threads of the selected user-owned process. Existing child processes
+  and future launch rules are not changed.
+- Independent swipe paging for monitoring, primary tiles and shortcuts, with
+  animated transitions. Page indicators appear only while editing.
+- An editable FPS-limit tile, a simplified header and an icon-only edit button.
+  The dashboard no longer collects FPS logs or displays FPS. MangoHud limits and
+  the optional in-game overlay remain available for explicitly wrapped apps.
+- One asynchronous resident KWin script replaces repeated synchronous script
+  reloads. Showing Dash clears stale KWin highlight previews without disabling
+  desktop effects.
+- Hidden-panel monitoring stops; theme/menu changes use filesystem watchers.
+  Android enumeration is asynchronous and page-gated; fan status is cached and
+  audio subprocess lifetimes are bounded.
 
-Install `handhelddash-1.2.0-1-any.pkg.tar.zst` with `pacman -U` on a compatible
-Thorch installation. `SHA256SUMS` and `.SRCINFO` accompany the package. Hardware
-support remains limited to the tested AYN Thor configuration; the architecture-
-independent package does not imply support for other devices.
+Install `handhelddash-1.3.0-1-any.pkg.tar.zst` with `pacman -U` on the supported
+Thorch installation. `SHA256SUMS` and `.SRCINFO` accompany the package.
 
-FPS controls still require applications to be explicitly launched with MangoHud.
-Android partition/userdata features remain extremely experimental and require
-matching device-private modules, keys and backends that are not bundled.
+Validation used real AYN Thor package deployments, live process-affinity changes,
+isolated UI operation and compositor screenshots. No unit tests were run. The
+architecture-independent package does not imply support for other devices.
 
-The interface was iteratively deployed during development. No unit tests or new
-full hardware validation pass were run for this release. Original code remains
-LGPL-3.0-or-later; Tabler SVGs retain MIT and Lucide assets retain ISC licensing.
+Known limitation: touching the lower-screen desktop can move focus away from an
+upper-screen game, after which some games minimize. This release does not claim
+to resolve that behavior. Android userdata access remains experimental and
+requires device-private backends not bundled here. Keyboard Native Input changes
+are maintained separately in the fcitx5-osk fork.

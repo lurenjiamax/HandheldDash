@@ -3,6 +3,21 @@ from handhelddash.ui.common import APP, QApplication, QDBusAbstractAdaptor, QPoi
 
 @pyqtClassInfo('D-Bus Interface', APP)
 class ControlEndpoint(QDBusAbstractAdaptor):
+    @pyqtSlot()
+    def DesktopScriptReady(self):
+        kwin = getattr(self.parent().desktop, 'kwin', None)
+        if kwin: kwin.scripts.started()
+
+    @pyqtSlot(result=str)
+    def DesktopNextCommand(self):
+        kwin = getattr(self.parent().desktop, 'kwin', None)
+        return kwin.scripts.command() if kwin else '{}'
+
+    @pyqtSlot(str)
+    def DesktopCommandDone(self, serial):
+        kwin = getattr(self.parent().desktop, 'kwin', None)
+        if kwin: kwin.scripts.completed(int(serial))
+
     @pyqtSlot(str,result=str)
     def DesktopScriptParameters(self, operation):
         kwin = getattr(self.parent().desktop, 'kwin', None)

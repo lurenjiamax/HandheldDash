@@ -46,3 +46,37 @@ class SessionService(dbus.service.Object):
         finally:
             os.close(handle)
 
+    def set_task_affinity(self,pid,started,cpu_list,uid):
+        if pid <= 1 or pid == os.getpid(): raise ValueError('Invalid task')
+        cpus = set()
+        for part in cpu_list.split(','):
+            bounds = part.strip().split('-')
+            if len(bounds) not in (1,2): raise ValueError('Invalid CPU list')
+            first,last = int(bounds[0]),int(bounds[-1])
+            if first < 0 or last < first or last > 4095: raise ValueError('Invalid CPU range')
+            cpus.update(range(first,last+1))
+        online = {int(p.name[3:]) for p in Path('/sys/devices/system/cpu').glob('cpu[0-9]*')
+                  if not (p/'online').exists() or (p/'online').read_text().strip() == '1'}
+        if not cpus or not cpus <= online: raise ValueError('Select online CPUs only')
+        handle = os.pidfd_open(pid)
+        previous = {}
+        try:
+            process = Path('/proc')/str(pid)
+            if process.stat().st_uid != uid: raise ValueError('Task is outside your user session')
+            if process.joinpath('stat').read_text().rsplit(')',1)[1].split()[19] != started:
+                raise ValueError('Task has already exited')
+            for thread in process.joinpath('task').iterdir():
+                tid = int(thread.name)
+                try:
+                    previous[tid] = os.sched_getaffinity(tid)
+                    os.sched_setaffinity(tid,cpus)
+                    if os.sched_getaffinity(tid) != cpus: raise ValueError('CPU selection restricted by process cgroup')
+                except ProcessLookupError:
+                    continue
+        except Exception:
+            for tid,mask in previous.items():
+                try: os.sched_setaffinity(tid,mask)
+                except OSError: pass
+            raise
+        finally:
+            os.close(handle)

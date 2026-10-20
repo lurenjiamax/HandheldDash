@@ -3,11 +3,13 @@ from handhelddash.ui.common import json, tr
 
 class AndroidPageMixin:
     def refresh_android(self):
+        if getattr(self,'android_busy',False): return
+        self.android_busy=True
         def update(raw):
             selected=self.android_combo.currentData(); self.android_parts=sorted(json.loads(raw),key=lambda p:p['label']!='userdata'); self.android_combo.blockSignals(True); self.android_combo.clear()
             for p in self.android_parts: self.android_combo.addItem(p['label'],p['label'])
             index=max(0,self.android_combo.findData(selected)); self.android_combo.setCurrentIndex(index); self.android_combo.blockSignals(False); self.describe_android(index)
-        self.call('AndroidPartitions',[],update)
+        self.call('AndroidPartitions',[],update,finished=lambda *_:setattr(self,'android_busy',False))
 
     def describe_android(self,index):
         if not self.android_parts: self.android_label.setText('No Android partitions found'); return
@@ -36,4 +38,3 @@ class AndroidPageMixin:
             self.call('Set',['userdata-share',['userdata']],lambda _:self.start('xdg-open','/mnt/aynthor-android/userdata'))
         else:
             self.start('xdg-open','/mnt/aynthor-android/'+str(self.android_combo.currentData() or ''))
-

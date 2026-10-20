@@ -10,6 +10,7 @@ class TelemetryService(dbus.service.Object):
             stamp = config.stat().st_mtime_ns if config and config.is_file() else 0
             if self.hardware_status is None or stamp != self.hardware_config_stamp or now-self.hardware_status_time >= 15:
                 self.hardware_status = self.backend.status()
+                self.cached_fan_status = self.backend.fan_status()
                 self.hardware_status_time = now; self.hardware_config_stamp = stamp
             data = self.hardware_status.copy()
             data['device'] = DEVICE.capabilities()
@@ -92,7 +93,7 @@ class TelemetryService(dbus.service.Object):
             data['backlight'] = {name: {'value': number('/sys/class/backlight/' + node + '/brightness'), 'max': number('/sys/class/backlight/' + node + '/max_brightness')} for name, node in DEVICE.backlights.items()}
             data['bypass_supported'] = False
             data['bypass_reason'] = 'No verified bypass charging backend for this device'
-            data['fan_control'] = self.backend.fan_status()
+            data['fan_control'] = self.cached_fan_status
             data['ufs_irqs']=self.ufs_irqs()
             data['input_ready'] = self.ip_ready
             data['vibration_gain_supported'] = self.ip_ready and self.vibration_gain_supported

@@ -41,6 +41,7 @@ class HardwareClient(QObject):
         self.request('Set',[operation,values],self.status.emit,completed)
 
     def request(self, method, args, callback=None, finished=None):
+        self.interface.setTimeout(5000 if method in ('Status','SetMonitoring','MonitoringDevices','LightingFrame','Pointer') else 200000)
         watcher=QDBusPendingCallWatcher(self.interface.asyncCall(method,*args),self); self.pending.add(watcher)
         def done(w):
             reply=QDBusPendingReply(w).reply(); self.pending.discard(w)

@@ -54,6 +54,8 @@ from handhelddash.ui.widgets.icons import control_icon
 
 from handhelddash.ui.presenter import StatusPresenterMixin
 from localization import CATALOG
+from handhelddash.services.preferences import mango_config
+from PyQt6.QtCore import QFileSystemWatcher
 
 class Panel(StatusPresenterMixin, DashboardPageMixin, ScreensPageMixin, ControllerPageMixin, FanPageMixin, LightingPageMixin, SettingsPageMixin, AndroidPageMixin, TasksPageMixin, CapturePageMixin, QWidget):
     def __init__(self):
@@ -69,6 +71,7 @@ class Panel(StatusPresenterMixin, DashboardPageMixin, ScreensPageMixin, Controll
                 capacities = {}; break
         self.little_cpus = {cpu for cpu,value in capacities.items() if value == min(capacities.values())} if capacities else self.system_cpus.copy()
         self.prefs = preferences(CATALOG)
+        if self.prefs.get('mangohud_mode') == 'takeover': mango_config(self.prefs)
         set_language(self.prefs['language'])
         self.qt_translator = QTranslator(self); self.translate_dialogs()
         self.state = {}
@@ -108,7 +111,6 @@ class Panel(StatusPresenterMixin, DashboardPageMixin, ScreensPageMixin, Controll
             QWidget#ThorPanel { background:#222331; }
             QLabel#Title { font-size:22px; font-weight:700; }
             QLabel#HeaderTitle { font-size:14px; font-weight:600; }
-            QLabel#Fps { font-size:18px; font-weight:700; color:#bca6ff; }
             QWidget#Gauge { background:#303144; border-radius:12px; }
             QWidget#Gauge QWidget { background:transparent; }
             QWidget#MetricIcon { background:transparent; }
@@ -131,8 +133,18 @@ class Panel(StatusPresenterMixin, DashboardPageMixin, ScreensPageMixin, Controll
             QTabWidget::tab-bar { alignment:left; } QLabel#Notice { color:#b8b5ca; font-size:12px; }
         '''
         self.apply_theme()
-        self.theme_timer = QTimer(self); self.theme_timer.timeout.connect(self.apply_theme); self.theme_timer.start(3000)
-        self.menu_timer = QTimer(self); self.menu_timer.timeout.connect(self.sync_desktop_actions); self.menu_timer.start(60000)
+        self.theme_watcher=QFileSystemWatcher(self)
+        self.theme_watcher.addPath(str(CONFIG.parent))
+        self.theme_watcher.directoryChanged.connect(self.apply_theme)
+        theme_file=CONFIG.parent/'kdeglobals'
+        if theme_file.is_file(): self.theme_watcher.addPath(str(theme_file))
+        self.theme_watcher.fileChanged.connect(self.apply_theme)
+        self.menu_watcher=QFileSystemWatcher(self)
+        for folder in (Path.home()/'.local/share/applications',Path('/usr/local/share/applications'),Path('/usr/share/applications')):
+            if folder.is_dir(): self.menu_watcher.addPath(str(folder))
+        self.menu_debounce=QTimer(self); self.menu_debounce.setSingleShot(True); self.menu_debounce.setInterval(1000)
+        self.menu_debounce.timeout.connect(self.sync_desktop_actions)
+        self.menu_watcher.directoryChanged.connect(lambda _:self.menu_debounce.start())
         QTimer.singleShot(1000,self.sync_desktop_actions)
         self.make_shell()
         self.make_control(); self.make_tasks(); self.make_screen(); self.make_fan(); self.make_lighting(); self.make_touchpad(); self.make_settings()
@@ -148,7 +160,7 @@ class Panel(StatusPresenterMixin, DashboardPageMixin, ScreensPageMixin, Controll
             if i == self.touchpad_index: continue
             label = QLabel(''); label.setObjectName('Notice'); label.setWordWrap(True); label.hide()
             self.tabs.widget(i).layout().addWidget(label); self.notices.append(label)
-        self.timer = QTimer(self); self.timer.timeout.connect(self.refresh); self.timer.start(2000)
+        self.timer = QTimer(self); self.timer.timeout.connect(self.refresh)
         self.desktop_visible = False
         self.install_placement()
         QTimer.singleShot(1000,self.configure_pointer)
@@ -335,9 +347,20 @@ class Panel(StatusPresenterMixin, DashboardPageMixin, ScreensPageMixin, Controll
         else:
             if self.tabs.currentIndex()==self.tasks_index: self.refresh_tasks()
             self.setWindowTitle('HandheldDash')
-            self.setWindowFlag(Qt.WindowType.WindowDoesNotAcceptFocus,True)
+            self.setWindowFlag(Qt.WindowType.WindowDoesNotAcceptFocus,False)
             self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating,True)
             self.place(); self.showFullScreen(); self.raise_(); self.refresh()
+
+    def showEvent(self,event):
+        super().showEvent(event)
+        if hasattr(self,'timer'):
+            self.timer.start(2000); self.sync_monitoring()
+            self.desktop.show_panel()
+
+    def hideEvent(self,event):
+        super().hideEvent(event)
+        if hasattr(self,'timer'):
+            self.timer.stop(); self.sync_monitoring(); self.desktop.hide_panel()
 
     @pyqtSlot()
     def Settings(self):

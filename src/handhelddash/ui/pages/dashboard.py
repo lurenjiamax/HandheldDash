@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 from handhelddash.ui.common import CORE_TILES, DASHBOARD_TILES, EmbeddedPopup, METRIC_ICONS, METRIC_TITLES, QApplication, QDrag, QEvent, QGridLayout, QHBoxLayout, QLabel, QMimeData, QProgressBar, QScrollArea, QSizePolicy, QStackedWidget, QTimer, QVBoxLayout, QWidget, Qt, TILE_MIME, dashboard_layout, dashboard_preset, json, math, theme_color, time, tr
 from handhelddash.ui.widgets.buttons import QuickTile, ScreenshotTile, StateButton, TemperatureButton
-from handhelddash.ui.widgets.dashboard import DashboardPage, EditTile, FpsMeter
+from handhelddash.ui.widgets.dashboard import DashboardPage, EditTile
 from handhelddash.ui.widgets.icons import MetricIcon, control_icon
+from handhelddash.ui.widgets.paging import RegionPager
 
 class DashboardPageMixin:
     def make_control(self):
@@ -11,31 +12,33 @@ class DashboardPageMixin:
         self.dashboard_editing=False; self.editor_selection=None; self.dashboard_draft=dashboard_layout(self.prefs.get('dashboard_layout'))
         self.metric_hold_timer=QTimer(self); self.metric_hold_timer.setSingleShot(True); self.metric_hold_timer.setInterval(550); self.metric_hold_timer.timeout.connect(self.open_metric_context)
         self.metric_press_key=None; self.metric_dragged=False; self.metric_held=False
-        self.fps = FpsMeter('— FPS'); self.fps.setObjectName('Fps'); self.fps.setFixedWidth(70); self.header.insertWidget(1,self.fps); self.fps.clicked.connect(self.open_fps_menu)
-        self.fps_source = QLabel('',self.dashboard_page_widget); self.fps_source.hide()
-        self.fps_mode = StateButton('FPS',[(0,'Unlimited','infinity'),(30,'30 FPS','fps-30'),(60,'60 FPS','fps-60'),(120,'120 FPS','fps-120')],self.set_fps_limit,icon_only=True)
-        self.fps_mode.setObjectName('FpsLimit'); self.fps_mode.setStyleSheet('padding:0; min-height:0; border-radius:10px; font-size:12px;')
-        self.fps_mode.setFixedSize(64,44); self.fps_mode.show_value(self.prefs['fps_limit']); self.fps_mode.setParent(self); self.fps_mode.hide()
+        self.fps_mode = QuickTile('FPS limit',[(0,'Unlimited','infinity'),(30,'30 FPS','fps-30'),(60,'60 FPS','fps-60'),(120,'120 FPS','fps-120')],lambda _:(self.fps_mode.show_value(self.prefs['fps_limit']),self.open_fps_menu()))
+        self.fps_mode.show_value(self.prefs['fps_limit'])
         edit = self.button('',self.dashboard_edit_tap); edit.setIcon(control_icon('pencil'))
-        edit.setFixedSize(44,44); edit.setStyleSheet('padding:0; min-height:0; border-radius:10px;')
+        edit.setFixedSize(44,44); edit.setStyleSheet('QPushButton { background:transparent; border:0; padding:0; min-height:0; }')
         edit.setAccessibleName(tr('Customize dashboard')); edit.setToolTip(tr('Customize dashboard')); self.header.insertWidget(self.header.count()-1,edit)
         self.dashboard_edit_button=edit
         self.dashboard_widgets = {}; self.dashboard_tiles = {}
         self.dashboard_info=QStackedWidget(); self.dashboard_info.setFixedHeight(94)
         self.dashboard_metrics = QWidget(); metrics_box=QVBoxLayout(self.dashboard_metrics); metrics_box.setContentsMargins(0,0,0,0)
+        self.region_pagers={}
         metrics_grid=QGridLayout(); self.dashboard_metrics_grid=metrics_grid; metrics_grid.setSpacing(6); metrics_box.addLayout(metrics_grid)
         for column in range(3): metrics_grid.setColumnStretch(column,1)
         self.dashboard_info.addWidget(self.dashboard_metrics); self.make_editor_toolbar(); layout.addWidget(self.dashboard_info)
         self.dashboard_tile_area=QWidget(); tile_box=QVBoxLayout(self.dashboard_tile_area); tile_box.setContentsMargins(0,0,0,0); tile_box.setSpacing(8)
         self.dashboard_core_area=QWidget(); self.dashboard_core_area.setFixedHeight(72)
-        self.dashboard_core_grid=QGridLayout(self.dashboard_core_area); self.dashboard_core_grid.setContentsMargins(0,0,0,0); self.dashboard_core_grid.setSpacing(8)
+        core_box=QVBoxLayout(self.dashboard_core_area); core_box.setContentsMargins(0,0,0,0); core_box.setSpacing(0)
+        self.dashboard_core_grid=QGridLayout(); core_box.addLayout(self.dashboard_core_grid,1); self.dashboard_core_grid.setContentsMargins(0,0,0,0); self.dashboard_core_grid.setSpacing(8)
         for column in range(2): self.dashboard_core_grid.setColumnStretch(column,1)
         tile_box.addWidget(self.dashboard_core_area)
-        self.dashboard_shortcut_area=QWidget(); self.dashboard_grid=QGridLayout(self.dashboard_shortcut_area)
+        self.dashboard_shortcut_area=QWidget(); shortcut_box=QVBoxLayout(self.dashboard_shortcut_area); shortcut_box.setContentsMargins(0,0,0,0); shortcut_box.setSpacing(0)
+        self.dashboard_grid=QGridLayout(); shortcut_box.addLayout(self.dashboard_grid,1)
         self.dashboard_grid.setContentsMargins(0,0,0,0); self.dashboard_grid.setSpacing(8)
         for column in range(5): self.dashboard_grid.setColumnStretch(column,1)
         for row in range(2): self.dashboard_grid.setRowStretch(row,1)
         tile_box.addWidget(self.dashboard_shortcut_area,1); layout.addWidget(self.dashboard_tile_area); layout.addStretch(1)
+        for key,region,box in [('metrics',self.dashboard_metrics,metrics_box),('primary',self.dashboard_core_area,core_box),('shortcuts',self.dashboard_shortcut_area,shortcut_box)]:
+            pager=RegionPager(region,self); box.addWidget(pager.indicator); pager.changed.connect(self.apply_dashboard_layout); self.region_pagers[key]=pager
         self.editor_selected_tiles=[]
         for index in range(12):
             tile=EditTile(self,True); tile.setParent(self.dashboard_shortcut_area); tile.hide(); self.editor_selected_tiles.append(tile)
@@ -90,12 +93,12 @@ class DashboardPageMixin:
         for key,title,icon in [('brightness','Brightness','sun'),('volume','Volume','volume-2')]:
             self.dashboard_tiles[key]=QuickTile(title,[(None,'Adjust','sun' if key == 'brightness' else 'volume-2')],lambda value,k=key:self.open_adjustment(k))
         self.dashboard_tiles['move_app']=QuickTile('Move current app',[(None,'Move current app','arrow-left-right')],lambda value:self.action('swap'))
+        self.dashboard_tiles['fps_cap']=self.fps_mode
         self.apply_dashboard_layout()
 
     def apply_dashboard_layout(self):
         configuration = self.dashboard_draft if self.dashboard_editing else dashboard_layout(self.prefs.get('dashboard_layout'))
-        self.fps.setVisible(configuration.get('show_fps',True)); self.fps_mode.hide()
-        self.header_title.setFixedWidth(90 if self.dashboard_editing else 110)
+        self.header_title.setVisible(self.dashboard_editing)
         self.clock.setVisible(not self.dashboard_editing)
         for button in self.editor_header_actions: button.setVisible(self.dashboard_editing)
         self.dashboard_edit_button.setVisible(not self.dashboard_editing)
@@ -103,20 +106,32 @@ class DashboardPageMixin:
         while self.dashboard_metrics_grid.count(): self.dashboard_metrics_grid.takeAt(0)
         for button in self.metric_add_slots: button.hide()
         for key in ('cpu','gpu','temp','fan','ram','battery','load','network','disk_io'): self.dashboard_widgets[('metrics',key)].hide()
-        for index,key in enumerate(configuration.get('metric_order',['cpu','gpu','temperature','fan','memory','battery'])):
+        order=configuration.get('metric_order',['cpu','gpu','temperature','fan','memory','battery'])
+        swipe=configuration.get('swipe_regions',{})
+        pager=self.region_pagers['metrics']; pager.configure(math.ceil(len(order)/6),swipe.get('metrics',True))
+        visible_metrics=order[pager.index*6:(pager.index+1)*6]
+        for index,key in enumerate(visible_metrics):
             card=self.dashboard_widgets[('metrics',{'temperature':'temp','memory':'ram'}.get(key,key))]; self.dashboard_metrics_grid.addWidget(card,index//3,index%3); card.show()
             card.setStyleSheet('QWidget#Gauge { border:1px dashed '+theme_color('#a68bff').name()+'; }' if self.editor_selection == 'metric:'+key else '')
         if self.dashboard_editing:
-            for index in range(len(configuration.get('metric_order',[])),6):
+            for index in range(len(visible_metrics),6):
                 button=self.metric_add_slots[index]; self.dashboard_metrics_grid.addWidget(button,index//3,index%3); button.show()
         self.dashboard_info.setVisible(self.dashboard_editing or (configuration['metrics'] and bool(configuration.get('metric_order',['cpu','gpu','temperature','fan','memory','battery']))))
-        self.dashboard_info.setCurrentIndex(0); self.layout_dashboard_regions()
+        self.dashboard_info.setCurrentIndex(0)
         tiles=configuration['tiles']
+        primary=[key for key in tiles if key in configuration.get('primary_tiles',tiles[:2])]
+        shortcuts=[key for key in tiles if key not in primary]
+        for key,items,capacity in [('primary',primary,2),('shortcuts',shortcuts,10)]:
+            self.region_pagers[key].configure(math.ceil(len(items)/capacity),swipe.get(key,True))
+        primary=primary[self.region_pagers['primary'].index*2:][:2]
+        shortcuts=shortcuts[self.region_pagers['shortcuts'].index*10:][:10]
+        self.visible_dashboard_tiles=primary+shortcuts
+        self.layout_dashboard_regions()
         while self.dashboard_grid.count(): self.dashboard_grid.takeAt(0)
         while self.dashboard_core_grid.count(): self.dashboard_core_grid.takeAt(0)
         for key,widget in self.dashboard_tiles.items():
             widget.editing=self.dashboard_editing
-            widget.core=key in tiles[:2]
+            widget.core=key in primary
             if widget.parentWidget() is not self.dashboard_shortcut_area: widget.setParent(self.dashboard_shortcut_area)
             widget.hide()
         for index,tile in enumerate(self.editor_selected_tiles):
@@ -124,17 +139,24 @@ class DashboardPageMixin:
             core=index<2; grid=self.dashboard_core_grid if core else self.dashboard_grid
             row=0 if core else (index-2)//5; column=index if core else (index-2)%5
             if self.dashboard_editing:
-                tile.core=core; grid.addWidget(tile,row,column); tile.set_tile(tiles[index] if index<len(tiles) else None)
-            elif index<len(tiles):
-                widget=self.dashboard_tiles[tiles[index]]; grid.addWidget(widget,row,column); widget.show()
+                page_tiles=primary if core else shortcuts; offset=index if core else index-2
+                tile.core=core; grid.addWidget(tile,row,column); tile.set_tile(page_tiles[offset] if offset<len(page_tiles) else None)
+            else:
+                page_tiles=primary if core else shortcuts; offset=index if core else index-2
+                if offset<len(page_tiles):
+                    widget=self.dashboard_tiles[page_tiles[offset]]; grid.addWidget(widget,row,column); widget.show()
         self.editor_add.setEnabled(True)
         self.sync_monitoring()
 
     def sync_monitoring(self):
         configuration=self.dashboard_draft if self.dashboard_editing else dashboard_layout(self.prefs.get('dashboard_layout'))
-        items=configuration.get('metric_order',['cpu','gpu','temperature','fan','memory','battery']) if self.dashboard_editing or configuration['metrics'] else []
+        items=configuration.get('metric_order',['cpu','gpu','temperature','fan','memory','battery']) if self.isVisible() and (self.dashboard_editing or configuration['metrics']) else []
+        if hasattr(self,'region_pagers'):
+            page=self.region_pagers['metrics'].index; items=items[page*6:(page+1)*6]
         payload=json.dumps({'items':items,'modes':configuration.get('metric_modes',{})})
-        self.call('SetMonitoring',[payload],quiet=True)
+        if payload != getattr(self,'monitoring_payload',None):
+            self.monitoring_payload=payload
+            self.call('SetMonitoring',[payload],quiet=True,finished=lambda success,*_:setattr(self,'monitoring_payload',payload if success else None))
         timer=self.metric_icons['fan'].timer
         if 'fan' in items:
             if not timer.isActive(): self.metric_icons['fan'].last_frame=time.monotonic(); timer.start(50)
@@ -152,11 +174,13 @@ class DashboardPageMixin:
 
     def layout_dashboard_regions(self):
         height=max(300,self.dashboard_page_widget.height()); metrics=max(80,round(height*.23))
-        self.dashboard_info.setFixedHeight(metrics)
+        dots=20 if self.dashboard_editing and self.region_pagers['metrics'].count>1 else 0
+        self.dashboard_info.setFixedHeight(metrics+dots)
         for key in ('cpu','gpu','temp','fan','ram','battery','load','network','disk_io'): self.dashboard_widgets.get(('metrics',key),self.dashboard_metrics).setFixedHeight(max(36,(metrics-6)//2))
         for button in self.metric_add_slots: button.setFixedHeight(max(36,(metrics-6)//2))
         area=max(220,height-(metrics if not self.dashboard_info.isHidden() else 0)-16)
-        self.dashboard_tile_area.setFixedHeight(area); self.dashboard_core_area.setFixedHeight(max(66,round(area*.23)))
+        area-=dots
+        self.dashboard_tile_area.setFixedHeight(area); self.dashboard_core_area.setFixedHeight(max(66,round(area*.23))+(20 if self.dashboard_editing and self.region_pagers['primary'].count>1 else 0))
 
     def eventFilter(self,watched,event):
         key=watched.property('metric_key')
@@ -184,8 +208,7 @@ class DashboardPageMixin:
             self.metric_held=True; self.open_tile_edit_menu('metric:'+self.metric_press_key)
 
     def open_fps_menu(self):
-        if self.dashboard_editing:
-            self.open_tile_edit_menu('fps'); return
+        if self.dashboard_editing: return
         popup=EmbeddedPopup(self); box=QVBoxLayout(popup); box.addWidget(QLabel('FPS limit'))
         for value,title,icon in self.fps_mode.options:
             button=self.button(title,lambda checked=False,v=value:self.set_fps_limit(v),True); button.setChecked(value == self.prefs['fps_limit']); button.setEnabled(self.prefs.get('mangohud_mode') == 'takeover'); button.clicked.connect(popup.hide); box.addWidget(button)
@@ -211,13 +234,13 @@ class DashboardPageMixin:
     def open_tile_edit_menu(self,key):
         if not self.dashboard_editing: return
         metric=key.startswith('metric:'); identity=key.split(':',1)[1] if metric else key
-        if key != 'fps' and identity not in (self.dashboard_draft.get('metric_order',[]) if metric else self.dashboard_draft['tiles']): return
+        if identity not in (self.dashboard_draft.get('metric_order',[]) if metric else self.dashboard_draft['tiles']): return
         if hasattr(self,'tile_edit_popup'): self.tile_edit_popup.hide(); self.tile_edit_popup.deleteLater()
         titles=METRIC_TITLES
-        popup=EmbeddedPopup(self); box=QVBoxLayout(popup); box.addWidget(QLabel(titles.get(identity,'FPS') if metric or key == 'fps' else DASHBOARD_TILES[key][0]))
+        popup=EmbeddedPopup(self); box=QVBoxLayout(popup); box.addWidget(QLabel(titles[identity] if metric else DASHBOARD_TILES[key][0]))
         row=QHBoxLayout(); box.addLayout(row)
-        delete=lambda:self.set_dashboard_metric(identity,False) if metric else self.set_dashboard_display('show_fps',False) if key == 'fps' else self.toggle_dashboard_tile(key)
-        add=self.show_available_metrics if metric or key == 'fps' else self.show_available_tiles
+        delete=lambda:self.set_dashboard_metric(identity,False) if metric else self.toggle_dashboard_tile(key)
+        add=self.show_available_metrics if metric else self.show_available_tiles
         for title,icon,callback in [('Add tile','plus',add),('Remove tile','trash',delete)]:
             button=self.button('',lambda checked=False,action=callback:action()); button.setIcon(control_icon(icon)); button.setAccessibleName(tr(title)); button.setToolTip(tr(title)); button.setFixedSize(44,44); button.clicked.connect(popup.hide); row.addWidget(button)
         if metric and identity in ('cpu','gpu'):
@@ -229,7 +252,17 @@ class DashboardPageMixin:
             source=self.dashboard_draft.get('metric_sources',{}).get(identity,'all')
             button=self.button(('Interface' if identity == 'network' else 'Disk')+' · '+source,lambda checked=False,k=identity:self.choose_metric_source(k)); button.clicked.connect(popup.hide); box.addWidget(button)
         if metric and identity == 'load': box.addWidget(QLabel('1 min · 5 min · 15 min'))
-        popup.setFixedSize(260,170 if metric and identity in ('cpu','gpu','network','disk_io','load') else 110); self.tile_edit_popup=popup; popup.show()
+        if not metric:
+            primary=self.dashboard_draft.setdefault('primary_tiles',self.dashboard_draft['tiles'][:2])
+            button=self.button('Move to shortcuts' if key in primary else 'Move to primary',lambda checked=False,k=key:self.move_tile_region(k))
+            button.clicked.connect(popup.hide); box.addWidget(button)
+        popup.setFixedSize(260,170 if not metric or identity in ('cpu','gpu','network','disk_io','load') else 110); self.tile_edit_popup=popup; popup.show()
+
+    def move_tile_region(self,key):
+        primary=self.dashboard_draft.setdefault('primary_tiles',self.dashboard_draft['tiles'][:2])
+        if key in primary: primary.remove(key)
+        else: primary.append(key)
+        self.refresh_dashboard_editor()
 
     def choose_metric_source(self,key):
         self.call('MonitoringDevices',[key],lambda raw:self.show_metric_sources(key,json.loads(raw)),quiet=True)
@@ -256,15 +289,12 @@ class DashboardPageMixin:
     def show_available_metrics(self):
         titles=dict(METRIC_TITLES); icons=dict(METRIC_ICONS)
         order=self.dashboard_draft.get('metric_order',[]); available=[key for key in titles if key not in order]
-        if not self.dashboard_draft.get('show_fps',True): available.append('fps'); titles['fps']='FPS'; icons['fps']='gauge'
         if not available: return
         popup=EmbeddedPopup(self); grid=QGridLayout(popup); columns=min(2,len(available))
         for index,key in enumerate(available):
-            action=lambda checked=False,k=key:self.set_dashboard_display('show_fps',True) if k == 'fps' else self.set_dashboard_metric(k,True)
-            reading=self.fps.text() if key == 'fps' else self.gauges[{'temperature':'temp','memory':'ram'}.get(key,key)][0].text()
+            action=lambda checked=False,k=key:self.set_dashboard_metric(k,True)
+            reading=self.gauges[{'temperature':'temp','memory':'ram'}.get(key,key)][0].text()
             button=self.button(reading,action); button.setIcon(control_icon(icons[key])); button.setFixedSize(180,44); button.setStyleSheet('border:0; border-radius:12px; padding:8px; text-align:left; background:'+theme_color('#303144').name()+';'); button.clicked.connect(popup.hide); grid.addWidget(button,index//columns,index%columns)
-            button.setEnabled(key == 'fps' or len(order)<6)
-            if key != 'fps' and len(order)>=6: button.setToolTip(tr('Remove a metric before adding another.'))
         popup.setFixedSize(columns*180+24+(columns-1)*6,math.ceil(len(available)/columns)*50+24); self.metric_add_popup=popup; popup.show()
 
     def set_dashboard_display(self,key,value):
@@ -272,14 +302,23 @@ class DashboardPageMixin:
 
     def set_dashboard_metric(self,key,value):
         order=self.dashboard_draft.setdefault('metric_order',['cpu','gpu','temperature','fan','memory','battery'])
-        if value and key not in order and len(order)<6: order.append(key)
+        if value and key not in order: order.append(key)
         elif not value and key in order: order.remove(key)
         self.dashboard_draft['metrics']=True; self.editor_selection=None
         self.refresh_dashboard_editor()
 
     def make_dashboard_editor(self,layout):
+        for key,title in [('metrics','Swipe metrics'),('primary','Swipe primary tiles'),('shortcuts','Swipe shortcuts')]:
+            button=self.button(title,lambda checked,k=key:self.set_region_swipe(k,checked),True)
+            button.setChecked(dashboard_layout(self.prefs.get('dashboard_layout')).get('swipe_regions',{}).get(key,True)); layout.addWidget(button)
         help_text=QLabel('Edit all tiles directly on the dashboard.'); help_text.setWordWrap(True); layout.addWidget(help_text)
         layout.addWidget(self.button('Customize dashboard',self.open_dashboard_editor)); layout.addStretch(1)
+
+    def set_region_swipe(self,key,enabled):
+        configuration=dashboard_layout(self.prefs.get('dashboard_layout'))
+        configuration.setdefault('swipe_regions',{})[key]=enabled
+        self.set_pref('dashboard_layout',configuration)
+        self.dashboard_draft=dashboard_layout(configuration); self.apply_dashboard_layout()
 
     def refresh_dashboard_editor(self):
         if not hasattr(self,'editor_selected_tiles'): return
@@ -317,7 +356,7 @@ class DashboardPageMixin:
         if key not in DASHBOARD_TILES: return
         tiles=self.dashboard_draft['tiles']
         if key in tiles: tiles.remove(key)
-        elif len(tiles)<12: tiles.append(key)
+        else: tiles.append(key)
         self.editor_selection=None
         if hasattr(self,'dashboard_add_dialog'): self.dashboard_add_dialog.accept()
         self.refresh_dashboard_editor()
@@ -345,13 +384,12 @@ class DashboardPageMixin:
         self.dashboard_draft = dashboard_layout(self.prefs.get('dashboard_layout')); self.refresh_dashboard_editor(); self.leave_dashboard_editor()
 
     def leave_dashboard_editor(self):
-        self.dashboard_editing=False; self.editor_selection=None; self.header_title.setText('HandheldDash'); self.apply_dashboard_layout()
+        self.dashboard_editing=False; self.editor_selection=None; self.header_title.clear(); self.apply_dashboard_layout()
         if hasattr(self,'dashboard_add_dialog'): self.dashboard_add_dialog.hide()
         self.open_tab(0)
         if hasattr(self,'settings_stack'):
             self.settings_stack.setCurrentIndex(0); self.change_group(0)
         visible=self.isVisible(); self.setWindowTitle('HandheldDash')
-        self.setWindowFlag(Qt.WindowType.WindowDoesNotAcceptFocus,True)
+        self.setWindowFlag(Qt.WindowType.WindowDoesNotAcceptFocus,False)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating,True)
         if visible: self.showFullScreen(); self.raise_()
-
