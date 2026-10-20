@@ -27,9 +27,6 @@ def save(data):
 
 def mango_config(prefs):
     CONFIG.mkdir(parents=True,exist_ok=True)
-    logs=Path('/var/cache/handhelddash/fps')
-    if not logs.is_dir(): logs=DATA/'fps'
-    logs.mkdir(parents=True,exist_ok=True)
     file=CONFIG/'MangoHud.conf'
-    file.write_text(f"fps\nframetime\ncpu_stats\ngpu_stats\nfps_limit={prefs['fps_limit']}\nno_display={int(not prefs['hud'])}\noutput_folder={logs}\nautostart_log=1\nlog_interval=500\nlog_duration=0\ncontrol=aynthor-mango-%p\n")
+    file.write_text(f"fps\nframetime\ncpu_stats\ngpu_stats\nfps_limit={prefs['fps_limit']}\nno_display={int(not prefs['hud'])}\nautostart_log=0\ncontrol=aynthor-mango-%p\n")
     return file

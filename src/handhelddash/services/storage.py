@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
+from gi.repository import GLib
 from handhelddash.services.runtime import LpUnpack, NAME, Path, STATE, dbus, json, logging, os, re, run, subprocess, threading, time
 
 class StorageService(dbus.service.Object):
@@ -138,7 +139,16 @@ class StorageService(dbus.service.Object):
                 part.update(self.userdata_status(part['device']))
         return found
 
-    @dbus.service.method(NAME, in_signature='', out_signature='s')
-    def AndroidPartitions(self):
-        return json.dumps(self.android())
-
+    @dbus.service.method(NAME, in_signature='', out_signature='s', async_callbacks=('reply','error'))
+    def AndroidPartitions(self,reply=None,error=None):
+        if getattr(self,'android_query_busy',False):
+            reply(getattr(self,'android_cached','[]')); return
+        self.android_query_busy=True
+        def execute():
+            try:
+                result=json.dumps(self.android()); self.android_cached=result
+                GLib.idle_add(lambda:(reply(result),False)[1])
+            except Exception as exc:
+                GLib.idle_add(lambda e=exc:(error(dbus.exceptions.DBusException(str(e),name=NAME+'.Failed')),False)[1])
+            finally: self.android_query_busy=False
+        threading.Thread(target=execute,daemon=True).start()

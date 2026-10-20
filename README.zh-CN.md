@@ -8,6 +8,6 @@
 
 设备配置、桌面适配、监控采样与通用 UI 控件已分层整理。其他 WM 使用受能力限制的通用适配，不执行 KDE 专属修改；这不代表新增硬件已经受支持。开发和部署统一使用 pacman 包，参见[适配边界与打包部署](docs/portability.md)。
 
-在兼容的 Thorch 系统上，从 [Releases](https://github.com/lurenjiamax/HandheldDash/releases) 下载 `handhelddash-1.2.0-1-any.pkg.tar.zst`，执行 `sudo pacman -U handhelddash-1.2.0-1-any.pkg.tar.zst`，再执行 `sudo systemctl enable --now inputplumber.service aynthor-hardwared.service`，并在 KDE 会话中执行 `systemctl --user enable --now aynthor-control.service`。使用 `handhelddash` 启动中控、`handhelddash --settings` 打开设置，或按 AYN 键唤出中控。[安装、升级与源码打包](docs/installation.zh-CN.md)。 **FPS 采集仅限通过 MangoHud 启动的应用。使用模拟器时，必须显式通过 `mangohud` 启动**，例如 `mangohud eden`；直接启动模拟器不会启用 FPS 采集。接管 MangoHud 配置不会自动为应用加载 MangoHud。
+在兼容的 Thorch 系统上，从 [Releases](https://github.com/lurenjiamax/HandheldDash/releases) 下载 `handhelddash-1.3.0-1-any.pkg.tar.zst`，执行 `sudo pacman -U handhelddash-1.3.0-1-any.pkg.tar.zst`，再执行 `sudo systemctl enable --now inputplumber.service aynthor-hardwared.service`，并在 KDE 会话中执行 `systemctl --user enable --now aynthor-control.service`。使用 `handhelddash` 启动中控、`handhelddash --settings` 打开设置，或按 AYN 键唤出中控。[安装、升级与源码打包](docs/installation.zh-CN.md)。限帧与可选的游戏内叠加层需要显式通过 MangoHud 启动应用，例如 `mangohud eden`；中控不采集或显示 FPS。接管 MangoHud 配置不会自动为应用加载 MangoHud。
 
 本项目原创代码采用 **LGPL-3.0-or-later**，见 [LICENSE](LICENSE) 与 [COPYING](COPYING)。内置 lpunpack 与 Lucide 图标保留各自 LGPL、ISC 授权；依赖保留各自许可证，包括 PyQt6 的 GPL／商业许可条款。本项目为无担保的社区软件，不应假定支持 AYN Thor 之外的硬件。Android 分区功能属于**极端实验性：可能完全无法工作，甚至导致 Android 无法启动**。未来计划拓展硬件；未支持的手柄布局及旁路供电不会宣称可用。[第三方声明](docs/third-party.md)。

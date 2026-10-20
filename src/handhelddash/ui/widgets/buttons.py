@@ -161,7 +161,8 @@ def paint_quick_tile(widget,painter,title,subtitle,kind,active=False,badge='',co
     if active:
         background=QColor.fromRgbF(background.redF()*.8+accent.redF()*.2,background.greenF()*.8+accent.greenF()*.2,background.blueF()*.8+accent.blueF()*.2)
     if not widget.isEnabled(): ink=muted
-    border=accent if active or selected or widget.hasFocus() else theme_color('#45465e')
+    navigation_focus=widget.hasFocus() and getattr(widget,'navigation_focus',widget.window().testAttribute(Qt.WidgetAttribute.WA_KeyboardFocusChange))
+    border=accent if active or selected or navigation_focus else theme_color('#45465e')
     pen=QPen(border,2 if selected else 1)
     if selected: pen.setStyle(Qt.PenStyle.DashLine)
     painter.setPen(pen); painter.setBrush(background); painter.drawRoundedRect(QRectF(widget.rect()).adjusted(1,1,-1,-1),10,10)
@@ -222,6 +223,14 @@ class QuickTile(StateButton):
 
     def sizeHint(self): return QSize(104,96)
     def minimumSizeHint(self): return QSize(0,66)
+
+    def focusInEvent(self,event):
+        self.navigation_focus=event.reason() in (Qt.FocusReason.TabFocusReason,Qt.FocusReason.BacktabFocusReason,Qt.FocusReason.ShortcutFocusReason,Qt.FocusReason.OtherFocusReason)
+        super().focusInEvent(event); self.update()
+
+    def mousePressEvent(self,event):
+        self.navigation_focus=False
+        super().mousePressEvent(event); self.update()
 
     def presentation(self):
         option = next((value for value in self.options if value[0] == self.current),None)

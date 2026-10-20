@@ -2,6 +2,7 @@
 from handhelddash.ui.common import DEVICE, ICON_SIZE, Path, QApplication, QGridLayout, QHBoxLayout, QIcon, QLabel, QMenu, QSize, QTimer, Qt, tr
 from handhelddash.ui.widgets.buttons import TaskButton
 from handhelddash.ui.widgets.icons import control_icon
+from handhelddash.ui.widgets.affinity import AffinityPopup
 
 class TasksPageMixin:
     def make_tasks(self):
@@ -72,9 +73,20 @@ class TasksPageMixin:
         pid = int(record.get('pid') or 0)
         try: started = Path(f'/proc/{pid}/stat').read_text().rsplit(')',1)[1].split()[19]
         except (OSError,IndexError): started = ''
+        affinity_action = menu.addAction(tr('CPU affinity…'))
+        affinity_action.setEnabled(pid > 1 and bool(started))
+        affinity_action.triggered.connect(lambda:self.edit_task_affinity(pid,started))
         action.setEnabled(pid > 1 and bool(started))
         action.triggered.connect(lambda:self.force_close_task(pid,started))
         menu.exec(self.task_buttons[index].mapToGlobal(self.task_buttons[index].rect().center()))
+
+    def edit_task_affinity(self,pid,started):
+        try: popup = AffinityPopup(self,pid,started)
+        except OSError as error:
+            self.notify(str(error)); return
+        popup.finished.connect(popup.deleteLater)
+        popup.finished.connect(lambda _:popup.scrim.deleteLater())
+        popup.show()
 
     def force_close_task(self,pid,started):
         self.call('Set',['kill-task',[str(pid),started]],lambda _:self.refresh_tasks())
@@ -93,4 +105,3 @@ class TasksPageMixin:
     def select_task(self,index):
         record=self.task_records[self.task_page*6+index]
         self.desktop.activate_window(record['id'])
-

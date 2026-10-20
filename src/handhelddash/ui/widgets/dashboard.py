@@ -77,12 +77,6 @@ class DashboardPage(QWidget):
         if hasattr(self.panel,'dashboard_tile_area'):
             self.panel.layout_dashboard_regions()
 
-class FpsMeter(QLabel):
-    clicked=pyqtSignal()
-    def mouseReleaseEvent(self,event):
-        if event.button() == Qt.MouseButton.LeftButton: self.clicked.emit(); event.accept()
-        else: super().mouseReleaseEvent(event)
-
 class ControlTabBar(QTabBar):
     def __init__(self):
         super().__init__(); self.setExpanding(True); self.setUsesScrollButtons(False); self.setElideMode(Qt.TextElideMode.ElideRight)

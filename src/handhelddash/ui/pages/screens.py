@@ -128,7 +128,12 @@ class ScreensPageMixin:
         revision = self.audio_revision
         self.audio_busy=True
         process=QProcess(self)
+        timeout=QTimer(process); timeout.setSingleShot(True); timeout.timeout.connect(process.kill); timeout.start(3000)
+        completed=False
         def done():
+            nonlocal completed
+            if completed: return
+            completed=True; timeout.stop()
             output=bytes(process.readAllStandardOutput()).decode().split()
             if process.exitCode()==0 and len(output)>=2:
                 try:
@@ -149,11 +154,15 @@ class ScreensPageMixin:
         if self.audio_active or not self.audio_queue: return
         operation = next(iter(self.audio_queue)); value = self.audio_queue.pop(operation)
         self.audio_active = True; process = QProcess(self)
+        timeout=QTimer(process); timeout.setSingleShot(True); timeout.timeout.connect(process.kill); timeout.start(3000)
+        completed=False
         def done(code=1,*args):
+            nonlocal completed
+            if completed: return
+            completed=True; timeout.stop()
             self.audio_active = False
             if code: self.notify('Error: '+bytes(process.readAllStandardError()).decode())
             process.deleteLater(); self.flush_audio()
         process.finished.connect(done)
         process.errorOccurred.connect(lambda error:done() if error == QProcess.ProcessError.FailedToStart else None)
         process.start('wpctl',[operation,'@DEFAULT_AUDIO_SINK@',value])
-

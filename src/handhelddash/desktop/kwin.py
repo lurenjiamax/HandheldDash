@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import QMetaType, QTimer, QVariant
 from PyQt6.QtDBus import QDBusInterface
 from PyQt6.QtDBus import QDBusMessage
 from PyQt6.QtDBus import QDBusVariant
@@ -68,11 +68,23 @@ class KWinAdapter(DesktopAdapter):
         ids=[value for value in rules.get('General','rules',fallback='').split(',') if value]; rule='handhelddash-panel'
         if rule not in ids: ids.append(rule)
         rules['General']['rules']=','.join(ids); rules['General']['count']=str(len(ids))
-        rules[rule]={'Description':'HandheldDash panel preserves game focus','wmclass':'org.aynthor.Control','wmclassmatch':'1','title':'HandheldDash','titlematch':'1','acceptfocus':'false','acceptfocusrule':'2'}
+        rules[rule]={'Description':'HandheldDash panel activation','wmclass':'org.aynthor.Control','wmclassmatch':'1','title':'HandheldDash','titlematch':'1','acceptfocus':'true','acceptfocusrule':'2'}
         file.parent.mkdir(parents=True,exist_ok=True); stage=file.with_suffix('.handhelddash-new')
         with stage.open('w',encoding='utf-8') as stream: rules.write(stream,space_around_delimiters=False)
-        stage.replace(file); QDBusInterface('org.kde.KWin','/KWin','org.kde.KWin',self.session).call('reconfigure')
+        stage.replace(file); QDBusInterface('org.kde.KWin','/KWin','org.kde.KWin',self.session).asyncCall('reconfigure')
         return True
+
+    def show_panel(self):
+        # A stale task-hover preview can hide even the active, keep-above panel.
+        # Clear the preview without disabling or reloading the desktop effect.
+        message=QDBusMessage.createMethodCall('org.kde.KWin','/org/kde/KWin/HighlightWindow',
+                                              'org.kde.KWin.HighlightWindow','highlightWindows')
+        windows=QVariant([]); windows.convert(QMetaType(QMetaType.Type.QStringList.value))
+        message.setArguments([windows]); self.session.asyncCall(message,1000)
+        return self.scripts.start('panel-visibility', {'operation':'panel-show'})
+
+    def hide_panel(self):
+        return self.scripts.start('panel-visibility', {'operation':'panel-hide'})
 
     def shortcut(self, name):
         QDBusInterface('org.kde.kglobalaccel','/component/kwin','org.kde.kglobalaccel.Component',self.session).asyncCall('invokeShortcut',name)

@@ -21,7 +21,7 @@ class OperationService(dbus.service.Object):
             lines=config.read_text(encoding='utf-8').splitlines() if config.exists() else []
             managed={'fps_limit','no_display','output_folder','autostart_log','log_interval','log_duration'}
             lines=[line for line in lines if line.partition('=')[0].strip() not in managed]
-            lines += [f'fps_limit={limit}',f'no_display={int(not hud)}','output_folder=/var/cache/handhelddash/fps','autostart_log=1','log_interval=500','log_duration=0']
+            lines += [f'fps_limit={limit}',f'no_display={int(not hud)}','autostart_log=0']
             # Keep the inode for MangoHud's configuration hot reload.
             content='\n'.join(lines)+'\n'
             if not config.exists() or config.read_text(encoding='utf-8') != content:
@@ -30,6 +30,10 @@ class OperationService(dbus.service.Object):
 
     def apply(self, operation, values, uid=0):
         operation, values = str(operation), list(map(str, values))
+        if operation == 'task-affinity':
+            if len(values) != 3: raise ValueError('Invalid affinity arguments')
+            self.set_task_affinity(int(values[0]),values[1],values[2],uid)
+            return self.quick_status()
         if operation == 'kill-task':
             if len(values) != 2: raise ValueError('Invalid task arguments')
             self.kill_task(int(values[0]),values[1],uid)
