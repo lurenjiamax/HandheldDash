@@ -9,7 +9,8 @@ from handhelddash.ui.common import tr
 
 class StatusPresenterMixin:
     def call(self, method, args, callback=None, quiet=False, finished=None):
-        if method not in ('Status','SetMonitoring','MonitoringDevices','LightingFrame','Feedback','Pointer'): self.error_text = None
+        if method not in ('Status','SetMonitoring','MonitoringDevices','LightingFrame','Feedback','Pointer'):
+            self.notify('')
         def done(success,busy):
             if method == 'Status': self.status_busy = False
             if success and not callback and not quiet: self.notify('Settings applied')
@@ -24,6 +25,7 @@ class StatusPresenterMixin:
         except (ValueError,KeyError,IndexError) as exc: self.hardware_error('Invalid response: '+str(exc))
 
     def set(self, operation, values, finished=None):
+        self.notify('')
         self.client.set(operation,values,finished)
 
     @property
@@ -113,7 +115,6 @@ class StatusPresenterMixin:
                 item = self.state.get('backlight',{}).get(key,{})
                 value = 100 * (item.get('value') or 0) / (item.get('max') or 1)
             slider.setValue(round(value))
-        self.notify(self.error_text or '')
 
     def select_temperature(self,sensor):
         self.set_pref('temperature_sensor',sensor); self.update_temperature()

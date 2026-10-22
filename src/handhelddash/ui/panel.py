@@ -156,6 +156,9 @@ class Panel(StatusPresenterMixin, DashboardPageMixin, ScreensPageMixin, Controll
         self.tabs.currentChanged.connect(self.update_tabs)
         self.update_tabs()
         self.notices = []
+        self.notice_text = ''
+        self.notice_timer = QTimer(self); self.notice_timer.setSingleShot(True)
+        self.notice_timer.setInterval(5000); self.notice_timer.timeout.connect(self.clear_notice)
         for i in range(self.tabs.count()):
             if i == self.touchpad_index: continue
             label = QLabel(''); label.setObjectName('Notice'); label.setWordWrap(True); label.hide()
@@ -225,8 +228,18 @@ class Panel(StatusPresenterMixin, DashboardPageMixin, ScreensPageMixin, Controll
         self.desktop.install_placement(self.prefs,{role:DEVICE.screen_name(role,QApplication.screens()) for role in ('top','bottom')})
 
     def notify(self,text):
+        if not text:
+            self.notice_text = ''; self.clear_notice(); return
+        if text == self.notice_text: return
+        self.notice_text = text
         for label in self.notices:
             label.setText(text); label.setVisible(bool(text))
+        self.notice_timer.start()
+
+    def clear_notice(self):
+        self.notice_timer.stop(); self.error_text = None
+        for label in self.notices:
+            label.setText(''); label.hide()
 
     def page(self, title, widget=None):
         widget = widget if widget is not None else QWidget(); layout = QVBoxLayout(widget)
