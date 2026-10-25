@@ -423,8 +423,7 @@ class Panel(StatusPresenterMixin, DashboardPageMixin, ScreensPageMixin, Controll
     def place(self):
         screen = next((s for s in QApplication.screens() if s.name() == DEVICE.screen_name('bottom',QApplication.screens())),QApplication.primaryScreen())
         self.winId(); self.windowHandle().setScreen(screen)
-        self.resize(min(604,screen.availableGeometry().width()-12),min(520,screen.availableGeometry().height()-12))
-        self.move(screen.availableGeometry().center()-self.rect().center())
+        self.setGeometry(screen.geometry())
 
     def closeEvent(self,event):
         event.ignore(); self.hide()
