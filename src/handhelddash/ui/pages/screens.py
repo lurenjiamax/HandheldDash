@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
+import json
 from handhelddash.ui.common import AdjustmentRow, DEVICE, EmbeddedPopup, ICON_SIZE, POPUP_MARGIN, POPUP_WIDTH, QApplication, QHBoxLayout, QLabel, QProcess, QTimer, QVBoxLayout, QWidget, Qt, tr
 from handhelddash.ui.widgets.buttons import StateButton
 from handhelddash.ui.widgets.icons import control_icon
