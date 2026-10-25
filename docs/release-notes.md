@@ -1,4 +1,4 @@
-HandheldDash 1.4.0 adds window-focus controls and touch-locked dark screens.
+HandheldDash 1.4.1 adds window-focus controls and touch-locked dark screens.
 
 - The former Gamepad focus tile is now Window focus, retaining the existing
   Automatic / top / bottom focus selection. Obsolete minimization rules are
@@ -6,7 +6,7 @@ HandheldDash 1.4.0 adds window-focus controls and touch-locked dark screens.
   screen locks add a transparent, non-focusable touch guard over the opposite
   bare desktop, below normal applications; Automatic removes it. Other apps
   and explicit Settings can still take focus. This is not independent keyboard
-  focus for both screens. Physical touch acceptance remains manual.
+  focus for both screens. The focus fix has been confirmed on the device.
 - Dark-screen controls no longer create black top-level windows. They set the
   panel brightness to zero and exclusively inhibit its physical touchscreen,
   stopping the lower-screen touchpad relay first. Display geometry is unchanged.
@@ -14,6 +14,9 @@ HandheldDash 1.4.0 adds window-focus controls and touch-locked dark screens.
 - The hardware Dash key restores both displays and touch before notifying the
   interface. Client disconnection also restores the screen. Saved brightness is
   recovered when the hardware service restarts.
+- Fixed a missing JSON import that crashed the interface after a screen-display
+  change. Actual UI-button operations verified both screens dimming, restoration
+  of original brightness and matching button states without a crash.
 - Error notices expire after five seconds. Duplicate background failures do not
   keep the notice visible; a new explicit operation can show a fresh failure.
 
