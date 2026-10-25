@@ -23,6 +23,7 @@ class KWinAdapter(DesktopAdapter):
 
     def install_placement(self, prefs, displays):
         remove_focus_rules(self.config,self.session)
+        self.configure_panel_focus(prefs.get('gamepad_focus','auto'))
         return self.scripts.start('aynthor-placement', {'operation':'placement', 'rules':prefs.get('app_screens',{}), 'defaultScreen':prefs.get('launch_screen',''), 'gamepadFocus':prefs.get('gamepad_focus','auto'), 'displays':displays})
 
     def focus_touchpad(self, output, active):
@@ -63,14 +64,20 @@ class KWinAdapter(DesktopAdapter):
                 if result.type()!=QDBusMessage.MessageType.ErrorMessage: save('touchpad_raw_initialized',True)
         return calibration
 
-    def configure_panel_focus(self):
+    def configure_panel_focus(self,mode='auto'):
         file=self.config.parent/'kwinrulesrc'; rules=configparser.ConfigParser(interpolation=None,strict=False); rules.optionxform=str
         if file.exists(): rules.read(file,encoding='utf-8')
         if not rules.has_section('General'): rules.add_section('General')
-        ids=[value for value in rules.get('General','rules',fallback='').split(',') if value]; rule='handhelddash-panel'
+        order='Order' if rules.has_option('General','Order') else 'rules'
+        ids=[value for value in rules.get('General',order,fallback='').split(',') if value]; rule='handhelddash-panel'
         if rule not in ids: ids.append(rule)
-        rules['General']['rules']=','.join(ids); rules['General']['count']=str(len(ids))
-        rules[rule]={'Description':'HandheldDash panel activation','wmclass':'org.aynthor.Control','wmclassmatch':'1','title':'HandheldDash','titlematch':'1','acceptfocus':'true','acceptfocusrule':'2'}
+        guard='handhelddash-desktop-touch-guard'
+        if guard not in ids: ids.append(guard)
+        rules['General'][order]=','.join(ids)
+        if order=='rules': rules['General']['count']=str(len(ids))
+        app_match={'wmclass':'(?i)^org[.]aynthor[.]Control$','wmclassmatch':'3'}
+        rules[rule]={'Description':'HandheldDash panel activation',**app_match,'title':'HandheldDash','titlematch':'1','acceptfocus':'false' if mode=='top' else 'true','acceptfocusrule':'2'}
+        rules[guard]={'Description':'HandheldDash desktop touch guard',**app_match,'title':'HandheldDash Desktop Touch Guard','titlematch':'1','acceptfocus':'false','acceptfocusrule':'2','below':'true','belowrule':'2','skiptaskbar':'true','skiptaskbarrule':'2','skipswitcher':'true','skipswitcherrule':'2'}
         file.parent.mkdir(parents=True,exist_ok=True); stage=file.with_suffix('.handhelddash-new')
         with stage.open('w',encoding='utf-8') as stream: rules.write(stream,space_around_delimiters=False)
         stage.replace(file); QDBusInterface('org.kde.KWin','/KWin','org.kde.KWin',self.session).asyncCall('reconfigure')

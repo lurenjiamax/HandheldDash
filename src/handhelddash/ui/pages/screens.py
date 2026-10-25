@@ -111,6 +111,8 @@ class ScreensPageMixin:
             for value,title in [('auto','Automatic'),('top','Lock top screen'),('bottom','Lock bottom screen')]:
                 button=self.button(title,lambda checked=False,v=value:self.set_gamepad_focus(v),True)
                 button.setMinimumHeight(44); self.focus_choices[value]=button; box.addWidget(button)
+            note=QLabel('Lock top screen keeps Dash from taking keyboard focus and blocks touches on the other desktop background. Other applications can still take focus. Automatic restores normal desktop interaction.')
+            note.setWordWrap(True); box.addWidget(note)
         for value,button in self.focus_choices.items(): button.setChecked(value==self.prefs.get('gamepad_focus','auto'))
         self.open_adjustment('focus')
 

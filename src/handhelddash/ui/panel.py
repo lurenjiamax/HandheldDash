@@ -226,6 +226,16 @@ class Panel(StatusPresenterMixin, DashboardPageMixin, ScreensPageMixin, Controll
 
     def install_placement(self):
         self.desktop.install_placement(self.prefs,{role:DEVICE.screen_name(role,QApplication.screens()) for role in ('top','bottom')})
+        if self.desktop.supports('panel_focus'):
+            from handhelddash.ui.widgets.focus_guard import DesktopTouchGuard
+            if not hasattr(self,'desktop_touch_guard'): self.desktop_touch_guard=DesktopTouchGuard()
+            self.desktop_touch_guard.hide()
+            QTimer.singleShot(500,self.update_focus_guard)
+
+    def update_focus_guard(self):
+        mode=self.prefs.get('gamepad_focus','auto')
+        opposite={'top':'bottom','bottom':'top'}.get(mode)
+        self.desktop_touch_guard.follow(DEVICE.screen_name(opposite,QApplication.screens()) if opposite else '')
 
     def notify(self,text):
         if not text:
@@ -348,7 +358,7 @@ class Panel(StatusPresenterMixin, DashboardPageMixin, ScreensPageMixin, Controll
         else: self.action(configured)
 
     def configure_panel_focus(self):
-        self.desktop.configure_panel_focus()
+        self.desktop.configure_panel_focus(self.prefs.get('gamepad_focus','auto'))
 
     @pyqtSlot()
     def Toggle(self):
@@ -361,7 +371,7 @@ class Panel(StatusPresenterMixin, DashboardPageMixin, ScreensPageMixin, Controll
         else:
             if self.tabs.currentIndex()==self.tasks_index: self.refresh_tasks()
             self.setWindowTitle('HandheldDash')
-            self.setWindowFlag(Qt.WindowType.WindowDoesNotAcceptFocus,False)
+            self.setWindowFlag(Qt.WindowType.WindowDoesNotAcceptFocus,self.prefs.get('gamepad_focus','auto')=='top')
             self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating,True)
             self.place(); self.showFullScreen(); self.raise_(); self.refresh()
 
