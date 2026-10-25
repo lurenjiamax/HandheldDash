@@ -15,6 +15,8 @@ class Hardware(ThorchService, InputPlumberService, TouchService, SessionService,
     def __init__(self, bus):
         self.backend=hardware_backend(DEVICE)
         self.bus = bus
+        # Recover dark panels before advertising the D-Bus service as ready.
+        self.initialize_displays()
         self.name = dbus.service.BusName(NAME, bus, do_not_queue=True)
         super().__init__(self.name, PATH)
         self.prefs = {'performance': 'standard', 'smart': False, 'joystick': 'gamepad', 'controller_output': '', 'vibration': True, 'vibration_gain': 100, 'fan_follow_performance': True}
@@ -48,7 +50,6 @@ class Hardware(ThorchService, InputPlumberService, TouchService, SessionService,
         self.touch_rotation = 0; self.touch_calibration = (1,0,0,0,1,0)
         self.touch_lock = threading.RLock()
         self.touch_resetting = False
-        self.initialize_displays()
         GLib.timeout_add_seconds(2,self.touchpad_watchdog)
         bus.add_signal_receiver(self.touchpad_owner_changed,signal_name='NameOwnerChanged',
                                 dbus_interface='org.freedesktop.DBus',bus_name='org.freedesktop.DBus')
