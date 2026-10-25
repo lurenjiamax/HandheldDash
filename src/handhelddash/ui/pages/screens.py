@@ -111,15 +111,8 @@ class ScreensPageMixin:
             for value,title in [('auto','Automatic'),('top','Lock top screen'),('bottom','Lock bottom screen')]:
                 button=self.button(title,lambda checked=False,v=value:self.set_gamepad_focus(v),True)
                 button.setMinimumHeight(44); self.focus_choices[value]=button; box.addWidget(button)
-            self.minimize_protection=self.button('Prevent minimization',self.set_minimize_protection,True)
-            self.minimize_protection.setMinimumHeight(44); box.addWidget(self.minimize_protection)
-            note=QLabel('Protects fullscreen windows on the selected screen. Automatic uses the top screen. Manual minimization is blocked while enabled.'); note.setWordWrap(True); box.addWidget(note)
         for value,button in self.focus_choices.items(): button.setChecked(value==self.prefs.get('gamepad_focus','auto'))
-        self.minimize_protection.setChecked(bool(self.prefs.get('prevent_minimize',False)))
         self.open_adjustment('focus')
-
-    def set_minimize_protection(self,enabled):
-        self.set_pref('prevent_minimize',bool(enabled)); self.install_placement()
 
     def set_screen_display(self,name,visible):
         role=next((role for role in DEVICE.backlights if DEVICE.screen_name(role,QApplication.screens())==name),None)
