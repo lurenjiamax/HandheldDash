@@ -8,9 +8,10 @@ from handhelddash.services.input_events import InputEventsService
 from handhelddash.services.storage import StorageService
 from handhelddash.services.telemetry import TelemetryService
 from handhelddash.services.operations import OperationService
+from handhelddash.services.displays import DisplayService
 from handhelddash.services.backend_factory import hardware_backend
 
-class Hardware(ThorchService, InputPlumberService, TouchService, SessionService, InputEventsService, StorageService, TelemetryService, OperationService, dbus.service.Object):
+class Hardware(ThorchService, InputPlumberService, TouchService, SessionService, InputEventsService, StorageService, TelemetryService, OperationService, DisplayService, dbus.service.Object):
     def __init__(self, bus):
         self.backend=hardware_backend(DEVICE)
         self.bus = bus
@@ -47,6 +48,7 @@ class Hardware(ThorchService, InputPlumberService, TouchService, SessionService,
         self.touch_rotation = 0; self.touch_calibration = (1,0,0,0,1,0)
         self.touch_lock = threading.RLock()
         self.touch_resetting = False
+        self.initialize_displays()
         GLib.timeout_add_seconds(2,self.touchpad_watchdog)
         bus.add_signal_receiver(self.touchpad_owner_changed,signal_name='NameOwnerChanged',
                                 dbus_interface='org.freedesktop.DBus',bus_name='org.freedesktop.DBus')

@@ -36,10 +36,24 @@ function reportWindows() {
         desktop:String(w.desktopFileName), caption:String(w.caption), app:String(w.resourceClass),
         screen:String(w.output ? w.output.name : ''), fullscreen:w.fullScreen}))));
 }
+function reportFocusTargets() {
+    const targets = preferences.preventMinimize ? windows().filter(w =>
+        w.normalWindow && !isPanel(w) && w.fullScreen && w.output &&
+        w.output.name === preferences.protectedOutput).map(w =>
+        ({app:String(w.resourceClass),caption:String(w.caption)})) : [];
+    send('FocusTargets',JSON.stringify(targets));
+}
+function watchWindow(w) {
+    place(w,false);
+    w.fullScreenChanged.connect(reportFocusTargets);
+    w.outputChanged.connect(reportFocusTargets);
+    w.captionChanged.connect(reportFocusTargets);
+    reportFocusTargets();
+}
 function dispatch(p) {
     const find = () => windows().find(w => String(w.internalId) === p.identity);
     switch (p.operation) {
-    case 'placement': preferences = p; windows().forEach(w => place(w, true)); break;
+    case 'placement': preferences = p; windows().forEach(w => place(w, true)); reportFocusTargets(); break;
     case 'panel-show': panelRequested = true; windows().filter(isPanel).forEach(activatePanel); break;
     case 'panel-hide':
         panelRequested = false;
@@ -75,6 +89,8 @@ registerShortcut('HandheldDash Dispatch', 'HandheldDash desktop command', '', ()
 registerShortcut('HandheldDash Gamepad Focus', 'Focus selected gamepad screen', '', () => {
     if (!panelRequested && preferences.gamepadFocus !== 'auto') focus(preferences.displays[preferences.gamepadFocus]);
 });
-workspace.windowAdded.connect(w => place(w, false));
+windows().forEach(watchWindow);
+workspace.windowAdded.connect(watchWindow);
+workspace.windowRemoved.connect(reportFocusTargets);
 workspace.cursorPosChanged.connect(reportCursor);
 callDBus('org.aynthor.Control', '/Control', 'org.aynthor.Control', 'DesktopScriptReady');

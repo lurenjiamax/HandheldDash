@@ -4,6 +4,8 @@
 - Screen brightness, audio volume, vibration and controller-plan popups.
 - Movable control cards and optional monitoring cards.
 - KWin window placement, task switching and screenshots.
+- Window focus includes optional native KWin minimization protection for fullscreen windows on the selected screen; Automatic protects the top screen. Manual minimization is blocked while enabled.
+- Dark-screen mode sets brightness to zero and exclusively inhibits that touchscreen without removing the output. The physical Dash key restores original brightness and touch. Panel scanning may continue. Client disconnection restores screens, and hardware-service restart recovers saved brightness.
 - Hold a task to select CPU affinity by touch, with per-core hardware maximum frequencies and capacity-tier shortcuts.
 - Joystick lighting, configurable hardware keys and optional Android storage access.
 

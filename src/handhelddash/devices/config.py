@@ -51,6 +51,7 @@ class Device:
     hotkey_devices: list = field(default_factory=list)
     led_patterns: dict = field(default_factory=dict)
     touchscreen: str = ''
+    touchscreens: dict = field(default_factory=dict)
     touchscreen_reset: str = ''
     fan_name: str = ''
     fan_reset_workaround: bool = False

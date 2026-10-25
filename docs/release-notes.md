@@ -1,31 +1,22 @@
-HandheldDash 1.3.0 improves touch controls and reduces background work on AYN Thor
-running the Thorch BSP with KDE Plasma/Wayland.
+HandheldDash 1.4.0 adds window-focus protection and touch-locked dark screens.
 
-- Touch-only CPU affinity in the Tasks long-press menu. Select individual cores
-  or capacity tiers; each core shows its hardware maximum frequency. Apply updates
-  existing threads of the selected user-owned process. Existing child processes
-  and future launch rules are not changed.
-- Independent swipe paging for monitoring, primary tiles and shortcuts, with
-  animated transitions. Page indicators appear only while editing.
-- An editable FPS-limit tile, a simplified header and an icon-only edit button.
-  The dashboard no longer collects FPS logs or displays FPS. MangoHud limits and
-  the optional in-game overlay remain available for explicitly wrapped apps.
-- One asynchronous resident KWin script replaces repeated synchronous script
-  reloads. Showing Dash clears stale KWin highlight previews without disabling
-  desktop effects.
-- Hidden-panel monitoring stops; theme/menu changes use filesystem watchers.
-  Android enumeration is asynchronous and page-gated; fan status is cached and
-  audio subprocess lifetimes are bounded.
+- The former Gamepad focus tile is now Window focus. Its popup combines the
+  existing Automatic / top / bottom focus selection with Prevent minimization.
+  Protection uses native KWin rules for fullscreen windows on the selected screen;
+  Automatic protects the top screen. Manual minimization is also blocked while
+  protection is enabled. Input focus, gamepad routing and game-internal pause
+  behavior remain separate concerns.
+- Dark-screen controls no longer create black top-level windows. They set the
+  panel brightness to zero and exclusively inhibit its physical touchscreen,
+  stopping the lower-screen touchpad relay first. Display geometry is unchanged.
+  This is dimming, not a promise that panel scanning or power is fully stopped.
+- The hardware Dash key restores both displays and touch before notifying the
+  interface. Client disconnection also restores the screen. Saved brightness is
+  recovered when the hardware service restarts.
+- Error notices expire after five seconds. Duplicate background failures do not
+  keep the notice visible; a new explicit operation can show a fresh failure.
 
-Install `handhelddash-1.3.0-1-any.pkg.tar.zst` with `pacman -U` on the supported
-Thorch installation. `SHA256SUMS` and `.SRCINFO` accompany the package.
-
-Validation used real AYN Thor package deployments, live process-affinity changes,
-isolated UI operation and compositor screenshots. No unit tests were run. The
-architecture-independent package does not imply support for other devices.
-
-Known limitation: touching the lower-screen desktop can move focus away from an
-upper-screen game, after which some games minimize. This release does not claim
-to resolve that behavior. Android userdata access remains experimental and
-requires device-private backends not bundled here. Keyboard Native Input changes
-are maintained separately in the fcitx5-osk fork.
+Screen inhibition requires an explicit touchscreen-to-backlight mapping in the
+device profile. Unsupported mappings are disabled. The verified target remains
+AYN Thor with Thorch BSP and KWin. No unit tests are run; verification uses actual
+runtime operations and device package deployment.

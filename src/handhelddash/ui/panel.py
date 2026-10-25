@@ -80,7 +80,7 @@ class Panel(StatusPresenterMixin, DashboardPageMixin, ScreensPageMixin, Controll
         self.audio_queue = {}; self.audio_active = False; self.audio_revision = 0
         self.cursor_position = None
         self.touch_calibration = [1,0,0,0,1,0]
-        self.screen_blanks = {}
+        self.screen_off = set()
         self.error_text = None
         self.setWindowTitle('HandheldDash')
         self.setObjectName('ThorPanel')
@@ -352,9 +352,10 @@ class Panel(StatusPresenterMixin, DashboardPageMixin, ScreensPageMixin, Controll
 
     @pyqtSlot()
     def Toggle(self):
-        if any(blank.isVisible() for blank in self.screen_blanks.values()):
-            for name,blank in self.screen_blanks.items():
-                blank.hide(); self.screen_display_buttons[name].show_value(True)
+        if self.screen_off:
+            for role in list(self.screen_off):
+                name=DEVICE.screen_name(role,QApplication.screens())
+                if name: self.set_screen_display(name,True)
             if self.isVisible(): return
         if self.isVisible(): self.hide()
         else:

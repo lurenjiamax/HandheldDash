@@ -3,6 +3,14 @@ from handhelddash.ui.common import APP, QApplication, QDBusAbstractAdaptor, QPoi
 
 @pyqtClassInfo('D-Bus Interface', APP)
 class ControlEndpoint(QDBusAbstractAdaptor):
+    @pyqtSlot(str)
+    def FocusTargets(self,raw):
+        kwin=getattr(self.parent().desktop,'kwin',None)
+        if not kwin: return
+        try: targets=json.loads(raw)
+        except ValueError: return
+        if isinstance(targets,list) and all(isinstance(item,dict) for item in targets):
+            kwin.protect_windows(targets if self.parent().prefs.get('prevent_minimize',False) else [])
     @pyqtSlot()
     def DesktopScriptReady(self):
         kwin = getattr(self.parent().desktop, 'kwin', None)
@@ -54,7 +62,8 @@ class ControlEndpoint(QDBusAbstractAdaptor):
 
     @pyqtSlot(str)
     def Adjustment(self,key):
-        if key in ('brightness','volume'): self.parent().open_adjustment(key)
+        if key == 'focus': self.parent().open_window_focus()
+        elif key in ('brightness','volume'): self.parent().open_adjustment(key)
 
     @pyqtSlot(str,result=bool)
     def PopupSnapshot(self,path):

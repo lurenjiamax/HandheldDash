@@ -6,6 +6,7 @@ from PyQt6.QtDBus import QDBusVariant
 from handhelddash.desktop.base import DesktopAdapter
 import configparser
 from handhelddash.desktop.scripts import KWinScripts
+from handhelddash.desktop.focus_rules import update_focus_rules
 import math
 import shutil
 
@@ -21,7 +22,12 @@ class KWinAdapter(DesktopAdapter):
         self.scripts=KWinScripts(self.session,self.notify,self)
 
     def install_placement(self, prefs, displays):
-        return self.scripts.start('aynthor-placement', {'operation':'placement', 'rules':prefs.get('app_screens',{}), 'defaultScreen':prefs.get('launch_screen',''), 'gamepadFocus':prefs.get('gamepad_focus','auto'), 'displays':displays})
+        return self.scripts.start('aynthor-placement', {'operation':'placement', 'rules':prefs.get('app_screens',{}), 'defaultScreen':prefs.get('launch_screen',''), 'gamepadFocus':prefs.get('gamepad_focus','auto'), 'displays':displays,
+            'preventMinimize':bool(prefs.get('prevent_minimize',False)),
+            'protectedOutput':displays.get(prefs.get('gamepad_focus') if prefs.get('gamepad_focus') in ('top','bottom') else 'top','')})
+
+    def protect_windows(self,targets):
+        update_focus_rules(self.config,self.session,targets)
 
     def focus_touchpad(self, output, active):
         return bool(output and active() and self.scripts.start('aynthor-touchpad-focus', {'operation':'touchpad','output':output}))

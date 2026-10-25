@@ -37,6 +37,8 @@ class TouchService(dbus.service.Object):
                            any(type(v) is not int or not 0 <= v <= 10000 for v in region) or
                            region[0] >= region[2] or region[1] >= region[3]): raise ValueError()
             if region != [] and not region: raise ValueError()
+            if region and 'bottom' in self.screen_holds:
+                raise ValueError('Screen touch is locked')
         except (ValueError,TypeError):
             raise dbus.exceptions.DBusException('Invalid touchpad region', name=NAME + '.InvalidArgument')
         with self.touch_lock:
@@ -224,4 +226,3 @@ class TouchService(dbus.service.Object):
             logging.exception('HOME+BACK: touchscreen recovery failed')
         finally:
             self.touch_resetting = False
-
