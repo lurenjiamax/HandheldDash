@@ -3,21 +3,30 @@
 let preferences = {rules:{}, displays:{}, defaultScreen:'', gamepadFocus:'auto'};
 let touchpad = false, panelRequested = false, previousWindow = null;
 const windows = () => workspace.windowList();
+const isGuard = w => String(w.caption) === 'HandheldDash Desktop Touch Guard' &&
+    String(w.resourceClass).toLowerCase().includes('org.aynthor.control');
 const isPanel = w => String(w.resourceClass).toLowerCase().includes('org.aynthor.control') &&
-    String(w.caption).startsWith('HandheldDash');
+    String(w.caption).startsWith('HandheldDash') && !isGuard(w);
 const send = (method, data) => callDBus('org.aynthor.Control', '/Control', 'org.aynthor.Control', method, data);
 function focus(output) {
     const w = workspace.stackingOrder.slice().reverse().find(w =>
-        w.normalWindow && !w.minimized && w.output && w.output.name === output && !isPanel(w));
+        w.normalWindow && !w.minimized && w.output && w.output.name === output && !isPanel(w) && !isGuard(w));
     if (w) workspace.activeWindow = w;
 }
 function activatePanel(w) {
     if (!panelRequested || !isPanel(w)) return;
+    if (preferences.gamepadFocus === 'top' && String(w.caption) === 'HandheldDash') return;
     const active = workspace.activeWindow;
     if (active && !isPanel(active) && !previousWindow) previousWindow = active;
     w.minimized = false; w.keepAbove = true; workspace.activeWindow = w;
 }
 function place(w, existing) {
+    if (isGuard(w)) {
+        const opposite = preferences.gamepadFocus === 'top' ? 'bottom' : 'top';
+        const output = workspace.screens.find(s => s.name === preferences.displays[opposite]);
+        if (output) workspace.sendClientToScreen(w, output);
+        w.keepAbove = false; w.keepBelow = true; return;
+    }
     const prefix = 'HandheldDash Blank ', blank = String(w.caption).startsWith(prefix);
     const panel = isPanel(w), app = String(w.resourceClass).toLowerCase();
     if (!blank && !panel && (existing || !w.normalWindow || w.skipTaskbar)) return;
@@ -31,7 +40,7 @@ function place(w, existing) {
     if (panel) activatePanel(w);
 }
 function reportWindows() {
-    const rows = windows().filter(w => w.normalWindow && !w.skipTaskbar && w.pid > 0 && !isPanel(w));
+    const rows = windows().filter(w => w.normalWindow && !w.skipTaskbar && w.pid > 0 && !isPanel(w) && !isGuard(w));
     send('WindowList', JSON.stringify(rows.map(w => ({pid:w.pid, id:String(w.internalId), active:w.active,
         desktop:String(w.desktopFileName), caption:String(w.caption), app:String(w.resourceClass),
         screen:String(w.output ? w.output.name : ''), fullscreen:w.fullScreen}))));
@@ -73,7 +82,8 @@ registerShortcut('HandheldDash Dispatch', 'HandheldDash desktop command', '', ()
     });
 });
 registerShortcut('HandheldDash Gamepad Focus', 'Focus selected gamepad screen', '', () => {
-    if (!panelRequested && preferences.gamepadFocus !== 'auto') focus(preferences.displays[preferences.gamepadFocus]);
+    if (preferences.gamepadFocus !== 'auto' && (!panelRequested || preferences.gamepadFocus === 'top'))
+        focus(preferences.displays[preferences.gamepadFocus]);
 });
 workspace.windowAdded.connect(w => place(w, false));
 workspace.cursorPosChanged.connect(reportCursor);

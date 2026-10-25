@@ -1,4 +1,9 @@
 {
+  "Lock top screen keeps Dash from taking keyboard focus and blocks touches on the other desktop background. Other applications can still take focus. Automatic restores normal desktop interaction.": {"en":"Lock top screen keeps Dash from taking keyboard focus and blocks touches on the other desktop background. Other applications can still take focus. Automatic restores normal desktop interaction.","zh_CN":"锁定上屏时，Dash 不获取键盘焦点，并屏蔽另一屏空白桌面的触摸。其他应用仍可获取焦点。自动模式恢复正常桌面操作。","zh_TW":"鎖定上螢幕時，Dash 不取得鍵盤焦點，並屏蔽另一螢幕空白桌面的觸控。其他應用程式仍可取得焦點。自動模式恢復正常桌面操作。"},
+  "Window focus": {"en":"Window focus","zh_CN":"窗口焦点","zh_TW":"視窗焦點"},
+  "Prevent minimization": {"en":"Prevent minimization","zh_CN":"防止最小化","zh_TW":"防止最小化"},
+  "Protects fullscreen windows on the selected screen. Automatic uses the top screen. Manual minimization is blocked while enabled.": {"en":"Protects fullscreen windows on the selected screen. Automatic uses the top screen. Manual minimization is blocked while enabled.","zh_CN":"保护所选屏幕的全屏窗口。自动模式保护上屏。开启期间无法手动最小化。","zh_TW":"保護所選螢幕的全螢幕視窗。自動模式保護上螢幕。開啟期間無法手動最小化。"},
+  "Dark screen locks touch and preserves the desktop layout. Press the Dash key to restore.": {"en":"Dark screen locks touch and preserves the desktop layout. Press the Dash key to restore.","zh_CN":"暗屏时锁定触摸并保留桌面布局。按 Dash 实体键恢复。","zh_TW":"暗屏時鎖定觸控並保留桌面配置。按 Dash 實體鍵恢復。"},
   "CPU affinity…": {"en":"CPU affinity…","zh_CN":"CPU 亲和性…","zh_TW":"CPU 親和性…"},
   "CPU affinity": {"en":"CPU affinity","zh_CN":"CPU 亲和性","zh_TW":"CPU 親和性"},
   "Small core": {"en":"Small core","zh_CN":"小核","zh_TW":"小核"},

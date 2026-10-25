@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
+import json
 from handhelddash.ui.common import AdjustmentRow, DEVICE, EmbeddedPopup, ICON_SIZE, POPUP_MARGIN, POPUP_WIDTH, QApplication, QHBoxLayout, QLabel, QProcess, QTimer, QVBoxLayout, QWidget, Qt, tr
 from handhelddash.ui.widgets.buttons import StateButton
 from handhelddash.ui.widgets.icons import control_icon
@@ -16,8 +17,10 @@ class ScreensPageMixin:
             name=DEVICE.screen_name(role,QApplication.screens())
             if not name or name in self.screen_display_buttons: continue
             button=StateButton(title,[(True,title,'monitor'),(False,title.replace('visible','blanked'),'monitor-off')],lambda value,n=name:self.set_screen_display(n,value))
+            button.setEnabled(role in DEVICE.touchscreens and role in DEVICE.backlights)
             button.show_value(True); self.screen_display_buttons[name]=button; row.addWidget(button,1)
         layout.addLayout(row)
+        note=QLabel('Dark screen locks touch and preserves the desktop layout. Press the Dash key to restore.'); note.setWordWrap(True); layout.addWidget(note)
         brightness_row=QHBoxLayout()
         for key,title in [('both','Both'),('top','Top'),('bottom','Bottom')]:
             row=QHBoxLayout(); icon=QLabel(); icon.setPixmap(control_icon('sun').pixmap(ICON_SIZE,ICON_SIZE)); row.addWidget(icon)
@@ -95,28 +98,40 @@ class ScreensPageMixin:
     def set_gamepad_focus(self,mode):
         if mode not in ('auto','top','bottom'): return
         self.set_pref('gamepad_focus',mode); self.install_placement()
+        self.gamepad_focus.show_value(mode)
+        for value,button in getattr(self,'focus_choices',{}).items(): button.setChecked(value==mode)
         QTimer.singleShot(1000,self.focus_gamepad)
 
     def focus_gamepad(self):
         if self.prefs.get('gamepad_focus','auto')!='auto':
             self.desktop.shortcut('HandheldDash Gamepad Focus')
 
+    def open_window_focus(self):
+        if 'focus' not in self.adjustment_dialogs:
+            dialog,box=self.adjustment_dialog('focus','Window focus'); self.focus_choices={}
+            for value,title in [('auto','Automatic'),('top','Lock top screen'),('bottom','Lock bottom screen')]:
+                button=self.button(title,lambda checked=False,v=value:self.set_gamepad_focus(v),True)
+                button.setMinimumHeight(44); self.focus_choices[value]=button; box.addWidget(button)
+            note=QLabel('Lock top screen keeps Dash from taking keyboard focus and blocks touches on the other desktop background. Other applications can still take focus. Automatic restores normal desktop interaction.')
+            note.setWordWrap(True); box.addWidget(note)
+        for value,button in self.focus_choices.items(): button.setChecked(value==self.prefs.get('gamepad_focus','auto'))
+        self.open_adjustment('focus')
+
     def set_screen_display(self,name,visible):
-        if visible:
-            if name in self.screen_blanks: self.screen_blanks[name].hide()
-            return
-        screen=next((s for s in QApplication.screens() if s.name()==name),None)
-        if not screen:
-            self.screen_display_buttons[name].show_value(True); self.notify('Capture screen is unavailable'); return
-        if name not in self.screen_blanks:
-            blank=QWidget(None,Qt.WindowType.Tool|Qt.WindowType.FramelessWindowHint|Qt.WindowType.WindowStaysOnTopHint|Qt.WindowType.WindowDoesNotAcceptFocus)
-            blank.setWindowTitle('HandheldDash Blank '+name)
-            blank.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
-            blank.setFocusPolicy(Qt.FocusPolicy.NoFocus); blank.setStyleSheet('background:black;')
-            self.screen_blanks[name]=blank
-        blank=self.screen_blanks[name]; blank.winId(); blank.windowHandle().setScreen(screen)
-        blank.setGeometry(screen.geometry()); blank.showFullScreen()
-        if name==DEVICE.screen_name('bottom',QApplication.screens()): self.hide()
+        role=next((role for role in DEVICE.backlights if DEVICE.screen_name(role,QApplication.screens())==name),None)
+        if role is None: return
+        button=self.screen_display_buttons[name]; button.setEnabled(False)
+        if not visible and role=='bottom': self.exit_touchpad()
+        def received(raw):
+            self.screen_off=set(json.loads(raw))
+            for target,widget in self.screen_display_buttons.items():
+                target_role=next((r for r in DEVICE.backlights if DEVICE.screen_name(r,QApplication.screens())==target),None)
+                widget.show_value(target_role not in self.screen_off)
+            if not visible and role=='bottom': self.hide()
+        def finished(success,busy):
+            button.setEnabled(True)
+            if not success: button.show_value(role not in self.screen_off)
+        self.call('ScreenPower',[role,visible],received,finished=finished)
 
     def screen_brightness(self,key,value):
         self.set('brightness',[key,str(value)])

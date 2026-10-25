@@ -1,6 +1,6 @@
 # Maintainer: lurenjiamax <1932231507@outlook.com>
 pkgname=handhelddash
-pkgver=1.3.0
+pkgver=1.4.1
 pkgrel=1
 pkgdesc='Touch-friendly handheld dashboard and privileged hardware daemon for AYN Thor'
 arch=('any')

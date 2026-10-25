@@ -155,12 +155,14 @@ class OperationService(dbus.service.Object):
                     raise ValueError('Brightness must be 1..100')
                 targets=['top','bottom'] if values[0]=='both' else [values[0]]
                 if any(target not in DEVICE.backlights for target in targets): raise ValueError('Requested backlight is unavailable')
-                for target in targets:
-                    node = DEVICE.backlights.get(target)
-                    if not node: raise ValueError('Backlight is unavailable for '+target)
-                    folder = Path('/sys/class/backlight')/node
-                    maximum = int(read(folder/'max_brightness'))
-                    (folder/'brightness').write_text(str(max(1,maximum*percent//100))+'\n')
+                with self.display_lock:
+                    if any(target in self.screen_holds for target in targets): raise ValueError('Restore the screen before changing brightness')
+                    for target in targets:
+                        node = DEVICE.backlights.get(target)
+                        if not node: raise ValueError('Backlight is unavailable for '+target)
+                        folder = Path('/sys/class/backlight')/node
+                        maximum = int(read(folder/'max_brightness'))
+                        (folder/'brightness').write_text(str(max(1,maximum*percent//100))+'\n')
             elif operation == 'key' and values in (['escape'], ['reload-mangohud']):
                 keys = [ecodes.KEY_ESC] if values == ['escape'] else [ecodes.KEY_LEFTSHIFT, ecodes.KEY_F4]
                 for key in keys:

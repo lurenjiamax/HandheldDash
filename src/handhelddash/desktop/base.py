@@ -26,7 +26,7 @@ class DesktopAdapter(QObject):
     def configure_pointer(self, output: str, source_name: str, prefs: dict, save):
         return None
 
-    def configure_panel_focus(self):
+    def configure_panel_focus(self,mode='auto'):
         return False
 
     def shortcut(self, name: str):

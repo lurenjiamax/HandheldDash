@@ -250,7 +250,7 @@ class QuickTile(StateButton):
 
     def paintEvent(self,event):
         subtitle,kind,active=self.presentation()
-        title='Focus' if self.title == 'Gamepad focus' else self.title
+        title=self.title
         paint_quick_tile(self,QPainter(self),title,subtitle,kind,active,'',self.core)
 
 class ScreenshotTile(QuickTile):
@@ -259,3 +259,14 @@ class ScreenshotTile(QuickTile):
 
     def cycle(self):
         if not self.editing and not self.held: self.capture()
+
+class PopupTile(QuickTile):
+    def __init__(self,title,options,open_popup):
+        super().__init__(title,options,lambda _:open_popup()); self.open_popup=open_popup
+
+    def cycle(self):
+        if not self.editing and not self.held: self.open_popup()
+
+    def open_options(self):
+        if not self.editing and self.isDown():
+            self.held=True; self.setDown(False); self.open_popup()

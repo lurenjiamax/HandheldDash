@@ -8,12 +8,15 @@ from handhelddash.services.input_events import InputEventsService
 from handhelddash.services.storage import StorageService
 from handhelddash.services.telemetry import TelemetryService
 from handhelddash.services.operations import OperationService
+from handhelddash.services.displays import DisplayService
 from handhelddash.services.backend_factory import hardware_backend
 
-class Hardware(ThorchService, InputPlumberService, TouchService, SessionService, InputEventsService, StorageService, TelemetryService, OperationService, dbus.service.Object):
+class Hardware(ThorchService, InputPlumberService, TouchService, SessionService, InputEventsService, StorageService, TelemetryService, OperationService, DisplayService, dbus.service.Object):
     def __init__(self, bus):
         self.backend=hardware_backend(DEVICE)
         self.bus = bus
+        # Recover dark panels before advertising the D-Bus service as ready.
+        self.initialize_displays()
         self.name = dbus.service.BusName(NAME, bus, do_not_queue=True)
         super().__init__(self.name, PATH)
         self.prefs = {'performance': 'standard', 'smart': False, 'joystick': 'gamepad', 'controller_output': '', 'vibration': True, 'vibration_gain': 100, 'fan_follow_performance': True}

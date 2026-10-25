@@ -13,6 +13,8 @@
  
 The daemon lets an active local user operate supported hardware without running the interface as root. [Features and limits](docs/features.md).
 
+Thor backend configuration: [lighting](docs/rgb.md) and [fan curves](docs/fancontrol.md).
+
 ### Limitations
 Gamepad focus only asks KWin to activate a window on the selected screen when controller activity is detected; it does **not** isolate or route gamepad input. Games reading SDL/evdev devices directly may respond simultaneously regardless of desktop focus. “Automatic” leaves focus unchanged. This feature depends on KWin and the recognized controller; reliable two-game input isolation has not been validated.
 

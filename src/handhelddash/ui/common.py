@@ -65,7 +65,7 @@ BUILD = build_identity("/usr/bin/aynthor-control" if Path(__file__).is_relative_
 ACTIONS = {'escape': 'Esc', 'desktop': 'Show desktop', 'overview': 'Overview', 'panel': 'Control panel', 'screenshot': 'Screenshot', 'swap': 'Move to other display', 'none': 'Disabled', 'command': 'Custom command', 'reset-touchscreen':'Reset touchscreen driver'}
 
 DASHBOARD_COMPONENTS = {
-    'controls': [('performance','Performance'),('fan_link','Fan linkage'),('input','Controller plan'),('focus','Gamepad focus'),('caffeine','Caffine'),('vibration','Vibration'),('lighting','Lighting'),('bypass','Bypass charging')],
+    'controls': [('performance','Performance'),('fan_link','Fan linkage'),('input','Controller plan'),('focus','Window focus'),('caffeine','Caffine'),('vibration','Vibration'),('lighting','Lighting'),('bypass','Bypass charging')],
     'metrics': [('cpu','CPU'),('gpu','GPU'),('temp','Temperature'),('fan','Fan'),('ram','RAM'),('battery','Power')],
     'actions': [('screenshot','Screenshot'),('overview','Overview'),('hud','FPS overlay')],
 }
@@ -74,7 +74,7 @@ DASHBOARD_SECTIONS = {'controls':'Quick controls','metrics':'Live metrics','acti
 
 DASHBOARD_TILES = {
     'performance': ('Performance mode','gauge'), 'fan_link': ('Fan mode','fan'),
-    'input': ('Controller plan','gamepad-2'), 'focus': ('Focus','monitor'),
+    'input': ('Controller plan','gamepad-2'), 'focus': ('Window focus','monitor'),
     'caffeine': ('Caffine','coffee'), 'vibration': ('Vibration','vibrate'),
     'lighting': ('Lighting','palette'), 'screenshot': ('Screenshot','camera'),
     'overview': ('Overview','panels-top-left'), 'hud': ('FPS overlay','eye'),

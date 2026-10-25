@@ -40,6 +40,8 @@ jobs:
           tar -tf ./*.pkg.tar.zst > package-files.txt
           grep -Fx 'usr/lib/aynthor/handhelddash/ui/widgets/affinity.py' package-files.txt
           grep -Fx 'usr/lib/aynthor/handhelddash/ui/widgets/paging.py' package-files.txt
+          grep -Fx 'usr/lib/aynthor/handhelddash/ui/widgets/focus_guard.py' package-files.txt
+          grep -Fx 'usr/lib/aynthor/handhelddash/services/displays.py' package-files.txt
           sha256sum ./*.pkg.tar.zst > SHA256SUMS
           runuser -u builder -- makepkg --printsrcinfo > .SRCINFO
       - uses: actions/upload-artifact@v4

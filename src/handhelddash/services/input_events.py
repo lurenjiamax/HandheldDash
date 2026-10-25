@@ -7,6 +7,7 @@ class InputEventsService(dbus.service.Object):
         if now - self.last_button.get(action, 0) < .2:
             return
         self.last_button[action] = now
+        if action == 'panel': self.restore_screens()
         for uid in self.sessions():
             self.Button(uid, action)
 
@@ -83,4 +84,3 @@ class InputEventsService(dbus.service.Object):
             self.ip_ready = False
             logging.warning('InputPlumber: %s', e)
         return True
-

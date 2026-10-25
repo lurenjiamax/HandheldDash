@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 from handhelddash.ui.common import CORE_TILES, DASHBOARD_TILES, EmbeddedPopup, METRIC_ICONS, METRIC_TITLES, QApplication, QDrag, QEvent, QGridLayout, QHBoxLayout, QLabel, QMimeData, QProgressBar, QScrollArea, QSizePolicy, QStackedWidget, QTimer, QVBoxLayout, QWidget, Qt, TILE_MIME, dashboard_layout, dashboard_preset, json, math, theme_color, time, tr
-from handhelddash.ui.widgets.buttons import QuickTile, ScreenshotTile, StateButton, TemperatureButton
+from handhelddash.ui.widgets.buttons import QuickTile, ScreenshotTile, StateButton, TemperatureButton, PopupTile
 from handhelddash.ui.widgets.dashboard import DashboardPage, EditTile
 from handhelddash.ui.widgets.icons import MetricIcon, control_icon
 from handhelddash.ui.widgets.paging import RegionPager
@@ -49,7 +49,7 @@ class DashboardPageMixin:
         self.performance = QuickTile('Performance mode', [('quiet','Quiet','leaf'),('standard','Balanced','gauge'),('performance','Performance','zap')], lambda v:self.set('performance',[v]))
         self.fan_link_control = QuickTile('Fan mode',self.fan_link_choices(),self.set_fan_follow)
         self.input_mode = QuickTile('Controller plan',[('gamepad','Default','gamepad'),('mouse','Mouse and keyboard','mouse')],lambda v:self.open_input_profiles())
-        self.gamepad_focus = QuickTile('Gamepad focus',[('auto','Automatic','gamepad'),('top','Lock top screen','monitor'),('bottom','Lock bottom screen','monitor')],self.set_gamepad_focus)
+        self.gamepad_focus = PopupTile('Window focus',[('auto','Automatic','gamepad'),('top','Lock top screen','monitor'),('bottom','Lock bottom screen','monitor')],self.open_window_focus)
         self.gamepad_focus.show_value(self.prefs.get('gamepad_focus','auto'))
         self.gamepad_focus.setToolTip(tr('Controls desktop focus; apps reading gamepad devices directly are not isolated.'))
         self.vibration = QuickTile('Vibration',[(False,'Rumble off','vibrate-off'),(True,'Rumble on','vibrate')],lambda v:self.open_vibration())

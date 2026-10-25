@@ -80,7 +80,7 @@ class Panel(StatusPresenterMixin, DashboardPageMixin, ScreensPageMixin, Controll
         self.audio_queue = {}; self.audio_active = False; self.audio_revision = 0
         self.cursor_position = None
         self.touch_calibration = [1,0,0,0,1,0]
-        self.screen_blanks = {}
+        self.screen_off = set()
         self.error_text = None
         self.setWindowTitle('HandheldDash')
         self.setObjectName('ThorPanel')
@@ -156,6 +156,9 @@ class Panel(StatusPresenterMixin, DashboardPageMixin, ScreensPageMixin, Controll
         self.tabs.currentChanged.connect(self.update_tabs)
         self.update_tabs()
         self.notices = []
+        self.notice_text = ''
+        self.notice_timer = QTimer(self); self.notice_timer.setSingleShot(True)
+        self.notice_timer.setInterval(5000); self.notice_timer.timeout.connect(self.clear_notice)
         for i in range(self.tabs.count()):
             if i == self.touchpad_index: continue
             label = QLabel(''); label.setObjectName('Notice'); label.setWordWrap(True); label.hide()
@@ -223,10 +226,30 @@ class Panel(StatusPresenterMixin, DashboardPageMixin, ScreensPageMixin, Controll
 
     def install_placement(self):
         self.desktop.install_placement(self.prefs,{role:DEVICE.screen_name(role,QApplication.screens()) for role in ('top','bottom')})
+        if self.desktop.supports('panel_focus'):
+            from handhelddash.ui.widgets.focus_guard import DesktopTouchGuard
+            if not hasattr(self,'desktop_touch_guard'): self.desktop_touch_guard=DesktopTouchGuard()
+            self.desktop_touch_guard.hide()
+            QTimer.singleShot(500,self.update_focus_guard)
+
+    def update_focus_guard(self):
+        mode=self.prefs.get('gamepad_focus','auto')
+        opposite={'top':'bottom','bottom':'top'}.get(mode)
+        self.desktop_touch_guard.follow(DEVICE.screen_name(opposite,QApplication.screens()) if opposite else '')
 
     def notify(self,text):
+        if not text:
+            self.notice_text = ''; self.clear_notice(); return
+        if text == self.notice_text: return
+        self.notice_text = text
         for label in self.notices:
             label.setText(text); label.setVisible(bool(text))
+        self.notice_timer.start()
+
+    def clear_notice(self):
+        self.notice_timer.stop(); self.error_text = None
+        for label in self.notices:
+            label.setText(''); label.hide()
 
     def page(self, title, widget=None):
         widget = widget if widget is not None else QWidget(); layout = QVBoxLayout(widget)
@@ -335,19 +358,20 @@ class Panel(StatusPresenterMixin, DashboardPageMixin, ScreensPageMixin, Controll
         else: self.action(configured)
 
     def configure_panel_focus(self):
-        self.desktop.configure_panel_focus()
+        self.desktop.configure_panel_focus(self.prefs.get('gamepad_focus','auto'))
 
     @pyqtSlot()
     def Toggle(self):
-        if any(blank.isVisible() for blank in self.screen_blanks.values()):
-            for name,blank in self.screen_blanks.items():
-                blank.hide(); self.screen_display_buttons[name].show_value(True)
+        if self.screen_off:
+            for role in list(self.screen_off):
+                name=DEVICE.screen_name(role,QApplication.screens())
+                if name: self.set_screen_display(name,True)
             if self.isVisible(): return
         if self.isVisible(): self.hide()
         else:
             if self.tabs.currentIndex()==self.tasks_index: self.refresh_tasks()
             self.setWindowTitle('HandheldDash')
-            self.setWindowFlag(Qt.WindowType.WindowDoesNotAcceptFocus,False)
+            self.setWindowFlag(Qt.WindowType.WindowDoesNotAcceptFocus,self.prefs.get('gamepad_focus','auto')=='top')
             self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating,True)
             self.place(); self.showFullScreen(); self.raise_(); self.refresh()
 

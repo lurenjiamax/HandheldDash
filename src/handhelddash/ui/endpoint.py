@@ -54,7 +54,8 @@ class ControlEndpoint(QDBusAbstractAdaptor):
 
     @pyqtSlot(str)
     def Adjustment(self,key):
-        if key in ('brightness','volume'): self.parent().open_adjustment(key)
+        if key == 'focus': self.parent().open_window_focus()
+        elif key in ('brightness','volume'): self.parent().open_adjustment(key)
 
     @pyqtSlot(str,result=bool)
     def PopupSnapshot(self,path):

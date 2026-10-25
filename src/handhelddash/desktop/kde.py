@@ -31,8 +31,8 @@ class KDEAdapter(DesktopAdapter):
     def configure_pointer(self, output, source_name, prefs, save):
         return self._window('configure_pointer', output, source_name, prefs, save)
 
-    def configure_panel_focus(self):
-        return self._window('configure_panel_focus')
+    def configure_panel_focus(self,mode='auto'):
+        return self._window('configure_panel_focus',mode)
 
     def shortcut(self, name):
         return self._window('shortcut', name)

@@ -23,6 +23,7 @@
     "performance": ["performance", "performance", "aggressive", "on"]
   },
   "touchscreen": "bottom_touchscreen",
+  "touchscreens": {"top":"top_touchscreen", "bottom":"bottom_touchscreen"},
   "touchscreen_reset": "1-0038",
   "fan_name": "pwmfan",
   "fan_reset_workaround": true
