@@ -1,4 +1,9 @@
 {
+  "Volume control": {"en":"Volume control","zh_CN":"音量控制方式","zh_TW":"音量控制方式"},
+  "Software volume": {"en":"Software volume","zh_CN":"软件音量","zh_TW":"軟體音量"},
+  "Hardware volume": {"en":"Hardware volume","zh_CN":"硬件音量","zh_TW":"硬體音量"},
+  "Reconnecting audio…": {"en":"Reconnecting audio…","zh_CN":"正在重新连接音频…","zh_TW":"正在重新連接音訊…"},
+  "Software volume allows finer adjustment. Hardware volume depends on device support. Switching briefly reconnects audio.": {"en":"Software volume allows finer adjustment. Hardware volume depends on device support. Switching briefly reconnects audio.","zh_CN":"软件音量支持更细的调节。硬件音量取决于设备支持，切换会短暂重连音频。","zh_TW":"軟體音量支援更細的調整。硬體音量取決於裝置支援，切換會短暫重連音訊。"},
   "Lock top screen keeps Dash from taking keyboard focus and blocks touches on the other desktop background. Other applications can still take focus. Automatic restores normal desktop interaction.": {"en":"Lock top screen keeps Dash from taking keyboard focus and blocks touches on the other desktop background. Other applications can still take focus. Automatic restores normal desktop interaction.","zh_CN":"锁定上屏时，Dash 不获取键盘焦点，并屏蔽另一屏空白桌面的触摸。其他应用仍可获取焦点。自动模式恢复正常桌面操作。","zh_TW":"鎖定上螢幕時，Dash 不取得鍵盤焦點，並屏蔽另一螢幕空白桌面的觸控。其他應用程式仍可取得焦點。自動模式恢復正常桌面操作。"},
   "Window focus": {"en":"Window focus","zh_CN":"窗口焦点","zh_TW":"視窗焦點"},
   "Prevent minimization": {"en":"Prevent minimization","zh_CN":"防止最小化","zh_TW":"防止最小化"},

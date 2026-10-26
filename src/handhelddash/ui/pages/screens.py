@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 import json
+import sys
+from handhelddash.services import audio_mixer
 from handhelddash.ui.common import AdjustmentRow, DEVICE, EmbeddedPopup, ICON_SIZE, POPUP_MARGIN, POPUP_WIDTH, QApplication, QHBoxLayout, QLabel, QProcess, QTimer, QVBoxLayout, QWidget, Qt, tr
 from handhelddash.ui.widgets.buttons import StateButton
 from handhelddash.ui.widgets.icons import control_icon
@@ -40,6 +42,17 @@ class ScreensPageMixin:
         self.volume_button=self.button('Volume · —%',lambda:self.open_adjustment('volume')); self.volume_button.hide()
         self.volume.edited.connect(lambda n:self.set_audio('set-volume',f'{n}%'))
         self.volume.valueChanged.connect(lambda n:self.update_volume_icon()); volume_layout.insertWidget(1,card)
+        self.audio_mode_device=None; self.audio_mode_busy=False
+        self.audio_mode=StateButton('Volume control',[
+            ('default','System default','volume-2'),('software','Software volume','sliders-horizontal'),
+            ('hardware','Hardware volume','volume-2')],self.set_audio_mode)
+        self.audio_mode.setEnabled(False); volume_layout.addWidget(self.audio_mode)
+        self.audio_mode_device_label=QLabel(); self.audio_mode_device_label.setWordWrap(True); volume_layout.addWidget(self.audio_mode_device_label)
+        note=QLabel('Software volume allows finer adjustment. Hardware volume depends on device support. Switching briefly reconnects audio.')
+        note.setWordWrap(True); volume_layout.addWidget(note)
+        self.audio_mode_timer=QTimer(self); self.audio_mode_timer.setInterval(5000)
+        self.audio_mode_timer.timeout.connect(lambda:self.refresh_audio_mode() if volume_dialog.isVisible() else None)
+        self.audio_mode_timer.start()
         row=QHBoxLayout()
         screen_options=[('','Desktop default','panels-top-left')]+[(DEVICE.screen_name(role,QApplication.screens()),title,'monitor') for role,title in [('top','New apps: top'),('bottom','New apps: bottom')] if DEVICE.screen_name(role,QApplication.screens())]
         self.launch_screen=StateButton('New application screen',screen_options,self.set_launch_screen)
@@ -76,6 +89,7 @@ class ScreensPageMixin:
         if not self.vibration_gain_slider.isSliderDown(): self.vibration_gain_slider.setValue(gain)
 
     def open_adjustment(self,key):
+        if key == 'volume': self.refresh_audio_mode()
         dialog=self.adjustment_dialogs.get(key)
         if dialog:
             dialog.setFixedSize(min(POPUP_WIDTH,self.width()-2*POPUP_MARGIN),min(self.height()-2*POPUP_MARGIN,dialog.sizeHint().height()))
@@ -139,6 +153,7 @@ class ScreensPageMixin:
             for target in ['top','bottom']: self.screen_sliders[target].setValue(value)
 
     def refresh_audio(self):
+        if getattr(self,'audio_mode_changing',False): return
         if getattr(self,'audio_busy',False) or self.audio_active or self.audio_queue: return
         revision = self.audio_revision
         self.audio_busy=True
@@ -164,6 +179,48 @@ class ScreensPageMixin:
     def set_audio(self,operation,value):
         self.audio_revision += 1; self.audio_queue[operation] = value
         self.flush_audio()
+
+    def refresh_audio_mode(self):
+        self.audio_mode_request(['status'])
+
+    def set_audio_mode(self,mode):
+        if self.audio_mode_device:
+            self.audio_mode_request(['set',mode,'--device',self.audio_mode_device])
+
+    def audio_mode_request(self,args):
+        if self.audio_mode_busy: return
+        changing=args[0]=='set'
+        if changing and (self.audio_active or self.audio_queue):
+            self.audio_mode.show_value(getattr(self,'audio_mode_current','default')); return
+        self.audio_mode_busy=True; self.audio_mode_changing=changing; self.audio_mode.setEnabled(False)
+        if changing:
+            self.volume.setEnabled(False); self.volume_icon.setEnabled(False)
+            self.audio_mode_device_label.setText('Reconnecting audio…')
+        process=QProcess(self)
+        timeout=QTimer(process); timeout.setSingleShot(True); timeout.timeout.connect(process.kill); timeout.start(120000 if changing else 35000)
+        completed=False
+        def done():
+            nonlocal completed
+            if completed: return
+            completed=True; timeout.stop()
+            try: data=json.loads(bytes(process.readAllStandardOutput()).decode())
+            except (ValueError,UnicodeDecodeError): data={'error':'Unable to read volume control mode'}
+            self.audio_mode_busy=False; self.audio_mode_changing=False
+            success=process.exitCode()==0 and 'error' not in data
+            if success:
+                self.audio_mode_device=data['device']; self.audio_mode_current=data['mode']
+                self.audio_mode.show_value(data['mode']); self.audio_mode_device_label.setText(data['description'])
+            else:
+                self.audio_mode.show_value(getattr(self,'audio_mode_current','default'))
+                self.audio_mode_device_label.setText(data['error'])
+                if changing: self.notify('Error: '+data['error'])
+            self.audio_mode.setEnabled(success or changing and self.audio_mode_device is not None)
+            if changing:
+                self.volume.setEnabled(True); self.volume_icon.setEnabled(True); self.refresh_audio()
+            process.deleteLater()
+        process.finished.connect(done)
+        process.errorOccurred.connect(lambda error:done() if error==QProcess.ProcessError.FailedToStart else None)
+        process.start(sys.executable,[audio_mixer.__file__,*args])
 
     def flush_audio(self):
         if self.audio_active or not self.audio_queue: return

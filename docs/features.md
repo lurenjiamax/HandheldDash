@@ -2,6 +2,7 @@
 
 - Performance presets and editable fan curves through the Thorch backend.
 - Screen brightness, audio volume, vibration and controller-plan popups.
+- Volume control offers System default / Software volume / Hardware volume per ALSA or Bluetooth device through WirePlumber 0.5+. Software mode bypasses coarse hardware volume steps. Selecting a mode briefly reconnects audio and retains the output, volume and mute setting. Hardware mode requests the hardware mixer when supported; unsupported hardware can still use software mixing. System default removes only Dash's override for that device. Other WirePlumber configuration is untouched.
 - Movable control cards and optional monitoring cards.
 - KWin window placement, task switching and screenshots.
 - Window focus provides Automatic / top / bottom focus selection.
