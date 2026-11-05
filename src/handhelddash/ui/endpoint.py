@@ -8,6 +8,11 @@ class ControlEndpoint(QDBusAbstractAdaptor):
         kwin = getattr(self.parent().desktop, 'kwin', None)
         if kwin: kwin.scripts.started()
 
+    @pyqtSlot(str)
+    def DesktopScriptFailed(self, message):
+        kwin = getattr(self.parent().desktop, 'kwin', None)
+        if kwin: kwin.scripts.failed(message)
+
     @pyqtSlot(result=str)
     def DesktopNextCommand(self):
         kwin = getattr(self.parent().desktop, 'kwin', None)
@@ -16,7 +21,10 @@ class ControlEndpoint(QDBusAbstractAdaptor):
     @pyqtSlot(str)
     def DesktopCommandDone(self, serial):
         kwin = getattr(self.parent().desktop, 'kwin', None)
-        if kwin: kwin.scripts.completed(int(serial))
+        if kwin:
+            try: result=json.loads(serial)
+            except ValueError: return
+            if isinstance(result,dict): kwin.scripts.completed(result)
 
     @pyqtSlot(str,result=str)
     def DesktopScriptParameters(self, operation):

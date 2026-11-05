@@ -1,26 +1,30 @@
-HandheldDash 1.4.1 adds window-focus controls and touch-locked dark screens.
+HandheldDash 1.4.2 improves startup, audio controls, Android shared storage and window management.
 
-- The former Gamepad focus tile is now Window focus, retaining the existing
-  Automatic / top / bottom focus selection. Obsolete minimization rules are
-  removed automatically. Lock top screen keeps Dash non-activating. Explicit
-  screen locks add a transparent, non-focusable touch guard over the opposite
-  bare desktop, below normal applications; Automatic removes it. Other apps
-  and explicit Settings can still take focus. This is not independent keyboard
-  focus for both screens. The focus fix has been confirmed on the device.
-- Dark-screen controls no longer create black top-level windows. They set the
-  panel brightness to zero and exclusively inhibit its physical touchscreen,
-  stopping the lower-screen touchpad relay first. Display geometry is unchanged.
-  This is dimming, not a promise that panel scanning or power is fully stopped.
-- The hardware Dash key restores both displays and touch before notifying the
-  interface. Client disconnection also restores the screen. Saved brightness is
-  recovered when the hardware service restarts.
-- Fixed a missing JSON import that crashed the interface after a screen-display
-  change. Actual UI-button operations verified both screens dimming, restoration
-  of original brightness and matching button states without a crash.
-- Error notices expire after five seconds. Duplicate background failures do not
-  keep the notice visible; a new explicit operation can show a fresh failure.
+- Fixed incomplete fullscreen placement that could leave black strips at screen edges.
+- Wait for the Wayland display before creating the Qt interface, and refresh stale
+  systemd user display variables on startup. Missing displays exit cleanly.
+- Added per-device System default / Software volume / Hardware volume choices for
+  ALSA and Bluetooth outputs using WirePlumber 0.5+. Software mode bypasses coarse
+  hardware volume steps. Switching briefly reconnects audio while retaining the
+  output, volume and mute setting. Bluetooth reconnection explicitly targets the
+  original headset, including during error recovery. Hardware mode depends on
+  device support; System default removes only Dash's override for that device.
+- Replaced the Android shared-storage FUSE view with a kernel idmapped bind mount.
+  User and Android media-directory ownership are mapped dynamically without
+  rewriting existing file ownership. Other valid Linux IDs retain identity
+  mappings. The view allows execution, retains nosuid/nodev and survives hardware
+  service restarts without a userspace filesystem process. The bindfs dependency
+  and implementation have been removed. Native permissions, ACLs and xattr
+  semantics apply. A compatible kernel/filesystem and util-linux 2.39+ are required.
+- Restored task listing and added Maximize, Minimize, Windowed and checkable
+  Always on top actions to task long-press menus. Desktop commands execute directly
+  through KWin scripting instead of global-shortcut dispatch. Windows remain
+  listed when process metadata is unavailable, with process-specific actions
+  disabled when their target cannot be verified. Duplicate interface owners are
+  rejected to prevent commands reaching a stale instance.
 
-Screen inhibition requires an explicit touchscreen-to-backlight mapping in the
-device profile. Unsupported mappings are disabled. The verified target remains
-AYN Thor with Thorch BSP and KWin. No unit tests are run; verification uses actual
-runtime operations and device package deployment.
+Verified on AYN Thor with Thorch BSP and KWin using installed pacman packages,
+real Bluetooth mode changes, shared-storage file operations and real window
+controls. Android storage remains experimental. Intermittent retained touch
+contacts and keyboard/touchpad coexistence are reported issues still under
+investigation; this release does not claim to fix them.

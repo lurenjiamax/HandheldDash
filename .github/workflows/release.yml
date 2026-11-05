@@ -42,6 +42,9 @@ jobs:
           grep -Fx 'usr/lib/aynthor/handhelddash/ui/widgets/paging.py' package-files.txt
           grep -Fx 'usr/lib/aynthor/handhelddash/ui/widgets/focus_guard.py' package-files.txt
           grep -Fx 'usr/lib/aynthor/handhelddash/services/displays.py' package-files.txt
+          grep -Fx 'usr/lib/aynthor/handhelddash/services/audio_mixer.py' package-files.txt
+          grep -Fx 'usr/lib/aynthor/handhelddash/services/storage.py' package-files.txt
+          grep -Fx 'usr/lib/aynthor/handhelddash/desktop/scripts/kwin.js' package-files.txt
           sha256sum ./*.pkg.tar.zst > SHA256SUMS
           runuser -u builder -- makepkg --printsrcinfo > .SRCINFO
       - uses: actions/upload-artifact@v4

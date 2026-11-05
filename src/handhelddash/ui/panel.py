@@ -103,7 +103,8 @@ class Panel(StatusPresenterMixin, DashboardPageMixin, ScreensPageMixin, Controll
         self.session = QDBusConnection.sessionBus()
         self.desktop = detect_desktop(self.session,CONFIG,self.start,self.notify,self)
         self.configure_panel_focus()
-        self.session.registerService(APP)
+        if not self.session.registerService(APP):
+            raise RuntimeError('Another HandheldDash instance owns the desktop interface')
         self.endpoint = ControlEndpoint(self)
         self.session.registerObject('/Control', self, QDBusConnection.RegisterOption.ExportAdaptors)
         self.theme_css = '''
@@ -423,8 +424,7 @@ class Panel(StatusPresenterMixin, DashboardPageMixin, ScreensPageMixin, Controll
     def place(self):
         screen = next((s for s in QApplication.screens() if s.name() == DEVICE.screen_name('bottom',QApplication.screens())),QApplication.primaryScreen())
         self.winId(); self.windowHandle().setScreen(screen)
-        self.resize(min(604,screen.availableGeometry().width()-12),min(520,screen.availableGeometry().height()-12))
-        self.move(screen.availableGeometry().center()-self.rect().center())
+        self.setGeometry(screen.geometry())
 
     def closeEvent(self,event):
         event.ignore(); self.hide()
@@ -439,7 +439,7 @@ class Panel(StatusPresenterMixin, DashboardPageMixin, ScreensPageMixin, Controll
                 try:
                     record['starttime']=(path/'stat').read_text(encoding='utf-8',errors='replace').rsplit(')',1)[1].split()[19]
                 except (OSError,ValueError,IndexError):
-                    continue
+                    record['starttime']=''
                 self.task_records.append(record)
             self.change_task_page(0)
         except (OSError,ValueError,KeyError,IndexError) as e: self.notify(str(e))

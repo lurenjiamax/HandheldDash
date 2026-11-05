@@ -2,6 +2,7 @@
 from handhelddash.ui.common import APP, QApplication, QDBusConnection, QDBusInterface, Qt, os, sys
 from handhelddash.ui.panel import Panel
 from handhelddash.ui.widgets.icons import ControlStyle
+from handhelddash.ui.session_ready import wait_for_display
 
 def main():
     if '--run' in sys.argv:
@@ -9,6 +10,9 @@ def main():
         if not args: raise SystemExit('Usage: aynthor-control --run PROGRAM [ARGS]')
         env = os.environ.copy()
         os.execvpe('mangohud',['mangohud',*args],env)
+    if not wait_for_display(refresh_environment='INVOCATION_ID' in os.environ):
+        print('HandheldDash: graphical display is not ready; exiting without initializing Qt',file=sys.stderr)
+        raise SystemExit(1)
     QApplication.setAttribute(Qt.ApplicationAttribute.AA_CompressHighFrequencyEvents,False)
     app = QApplication(sys.argv); app.setStyle(ControlStyle(app.style().objectName())); app.setQuitOnLastWindowClosed(False); app.setDesktopFileName('org.aynthor.Control')
     bus = QDBusConnection.sessionBus()

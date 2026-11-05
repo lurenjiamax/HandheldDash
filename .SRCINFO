@@ -1,12 +1,13 @@
 pkgbase = handhelddash
 	pkgdesc = Touch-friendly handheld dashboard and privileged hardware daemon for AYN Thor
-	pkgver = 1.0.0
+	pkgver = 1.4.2
 	pkgrel = 1
 	url = https://github.com/lurenjiamax/HandheldDash
 	install = handhelddash.install
 	arch = any
 	license = LGPL-3.0-or-later
 	license = ISC
+	license = MIT
 	makedepends = git
 	depends = python
 	depends = python-dbus
@@ -15,20 +16,21 @@ pkgbase = handhelddash
 	depends = python-yaml
 	depends = python-pyqt6
 	depends = qt6-wayland
-	depends = qt6-tools
-	depends = spectacle
 	depends = libpulse
 	depends = libnotify
 	depends = wireplumber
 	depends = systemd
-	depends = util-linux
-	depends = plasma-workspace
-	depends = kwin
-	depends = thorch-bsp
-	depends = thorch-kde-defaults
-	depends = thorch-inputplumber
-	optdepends = mangohud: FPS overlay and limits for wrapped games
-	source = HandheldDash::git+https://github.com/lurenjiamax/HandheldDash.git#tag=v1.0.0
+	depends = util-linux>=2.39
+	optdepends = qt6-tools: KWin D-Bus scripting integration
+	optdepends = kwin: window placement and focus adapter
+	optdepends = plasma-workspace: Plasma panel adapter
+	optdepends = spectacle: KDE screenshot capture
+	optdepends = thorch-bsp: AYN Thor hardware backend
+	optdepends = thorch-kde-defaults: AYN Thor desktop defaults
+	optdepends = thorch-inputplumber: controller mapping and rumble on AYN Thor
+	optdepends = kmod: load optional Android userdata kernel modules
+	optdepends = mangohud: overlay and frame limits
+	source = HandheldDash::git+https://github.com/lurenjiamax/HandheldDash.git#tag=v1.4.2
 	sha256sums = SKIP
 
 pkgname = handhelddash

@@ -44,6 +44,9 @@ class DesktopAdapter(QObject):
     def activate_window(self, identity: str):
         return False
 
+    def window_action(self, identity: str, action: str, enabled: bool = False):
+        return False
+
     def stop_touchpad(self):
         return False
 

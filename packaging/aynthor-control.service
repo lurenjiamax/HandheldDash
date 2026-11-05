@@ -1,6 +1,6 @@
 [Unit]
 Description=HandheldDash control panel and hardware key listener
-After=graphical-session-pre.target
+After=graphical-session-pre.target plasma-kwin_wayland.service
 PartOf=graphical-session.target
 
 [Service]

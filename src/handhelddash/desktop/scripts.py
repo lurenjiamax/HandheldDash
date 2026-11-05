@@ -1,4 +1,4 @@
-"""Asynchronous lifecycle and commands for one resident KWin script."""
+"""Serialize KWin commands without routing them through global shortcuts."""
 import json
 from pathlib import Path
 from PyQt6.QtCore import QObject, QTimer
@@ -19,6 +19,7 @@ class KWinScripts(QObject):
         self.session, self.notify = session, notify
         self.parameters = {}; self.queue = {}; self.pending = set()
         self.ready = False; self.loading = False; self.active = None; self.serial = 0
+        self.previous_window = ''; self.touchpad_active = False; self.panel_requested = False
         self.timeout = QTimer(self); self.timeout.setSingleShot(True)
         self.timeout.timeout.connect(self.failed)
         session.interface().serviceOwnerChanged.connect(self.owner_changed)
@@ -40,7 +41,7 @@ class KWinScripts(QObject):
         self.call('org.kde.KWin', '/Scripting', 'org.kde.kwin.Scripting', method, args, callback)
 
     def ensure_loaded(self):
-        if self.ready or self.loading: return
+        if self.loading or self.active is None: return
         self.loading = True
         names = iter((*self.legacy, self.name))
         def unload(_=None):
@@ -56,8 +57,7 @@ class KWinScripts(QObject):
         unload()
 
     def started(self):
-        self.timeout.stop(); self.loading = False; self.ready = True
-        self.flush()
+        self.ready = True
 
     def failed(self, message='KWin command timed out'):
         self.timeout.stop(); self.loading = False; self.ready = False; self.active = None
@@ -69,7 +69,7 @@ class KWinScripts(QObject):
         self.timeout.stop(); self.ready = False; self.loading = False; self.active = None
         if new and self.parameters:
             for key, value in self.parameters.items(): self.queue[key] = value
-            self.ensure_loaded()
+            self.flush()
 
     def stop(self, name: str):
         self.manager_call('unloadScript', ['handhelddash-touchpad-escape'], lambda _:None)
@@ -85,20 +85,29 @@ class KWinScripts(QObject):
                 lambda _:self.manager_call('loadScript',[str(script_path('touchpad.js')),'handhelddash-touchpad-escape'],loaded))
         self.parameters[name] = parameters
         self.queue[name] = parameters
-        self.ensure_loaded(); self.flush()
+        if parameters['operation'] in ('touchpad','touchpad-stop'):
+            self.touchpad_active = parameters['operation'] == 'touchpad'
+        if parameters['operation'] in ('panel-show','panel-hide'):
+            self.panel_requested = parameters['operation'] == 'panel-show'
+        self.flush()
         return True
 
     def flush(self):
-        if not self.ready or self.active is not None or not self.queue: return
+        if self.loading or self.active is not None or not self.queue: return
         key = next(iter(self.queue)); parameters = self.queue.pop(key)
-        self.serial += 1; self.active = dict(parameters, serial=self.serial)
-        self.timeout.start(4000)
-        self.call('org.kde.kglobalaccel', '/component/kwin', 'org.kde.kglobalaccel.Component',
-                  'invokeShortcut', ['HandheldDash Dispatch'], lambda _:None)
+        placement = next((p for p in self.parameters.values() if p['operation']=='placement'), {})
+        self.serial += 1
+        self.active = dict(parameters, serial=self.serial, preferences=placement,
+                           touchpadActive=self.touchpad_active, panelRequested=self.panel_requested,
+                           previousWindow=self.previous_window)
+        self.ensure_loaded()
 
     def command(self):
         return json.dumps(self.active or {})
 
-    def completed(self, serial: int):
-        if self.active is None or self.active['serial'] != serial: return
-        self.timeout.stop(); self.active = None; self.flush()
+    def completed(self, result):
+        if self.active is None or self.active['serial'] != result.get('serial'): return
+        self.previous_window = str(result.get('previousWindow') or '')
+        self.timeout.stop(); self.loading = False; self.ready = True; self.active = None
+        if result.get('error'): self.notify(str(result['error']))
+        QTimer.singleShot(0, self.flush)

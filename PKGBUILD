@@ -1,14 +1,14 @@
 # Maintainer: lurenjiamax <1932231507@outlook.com>
 pkgname=handhelddash
-pkgver=1.4.1
+pkgver=1.4.2
 pkgrel=1
 pkgdesc='Touch-friendly handheld dashboard and privileged hardware daemon for AYN Thor'
 arch=('any')
 url='https://github.com/lurenjiamax/HandheldDash'
 license=('LGPL-3.0-or-later' 'ISC' 'MIT')
-depends=('python' 'python-dbus' 'python-gobject' 'python-evdev' 'python-yaml' 'python-pyqt6' 'qt6-wayland' 'libpulse' 'libnotify' 'wireplumber' 'systemd' 'util-linux')
+depends=('python' 'python-dbus' 'python-gobject' 'python-evdev' 'python-yaml' 'python-pyqt6' 'qt6-wayland' 'libpulse' 'libnotify' 'wireplumber' 'systemd' 'util-linux>=2.39')
 makedepends=('git')
-optdepends=('qt6-tools: KWin D-Bus scripting integration' 'kwin: window placement and focus adapter' 'plasma-workspace: Plasma panel adapter' 'spectacle: KDE screenshot capture' 'thorch-bsp: AYN Thor hardware backend' 'thorch-kde-defaults: AYN Thor desktop defaults' 'thorch-inputplumber: controller mapping and rumble on AYN Thor' 'kmod: load optional Android userdata kernel modules' 'mangohud: overlay and frame limits' 'bindfs: Android shared storage access for ordinary users')
+optdepends=('qt6-tools: KWin D-Bus scripting integration' 'kwin: window placement and focus adapter' 'plasma-workspace: Plasma panel adapter' 'spectacle: KDE screenshot capture' 'thorch-bsp: AYN Thor hardware backend' 'thorch-kde-defaults: AYN Thor desktop defaults' 'thorch-inputplumber: controller mapping and rumble on AYN Thor' 'kmod: load optional Android userdata kernel modules' 'mangohud: overlay and frame limits')
 install=handhelddash.install
 _gitref="${HANDHELDDASH_REF:-tag=v${pkgver}}"
 source=("HandheldDash::git+${url}.git#${_gitref}")
