@@ -20,3 +20,13 @@ Only selected monitoring cards request their samplers. Missing data is shown as 
 AYN Thor with the Thorch BSP and KWin is the verified target. Unsupported capabilities are disabled. Gamepad focus does not isolate controller input between games. MangoHud provides frame limits and an optional in-game overlay; the dashboard does not collect FPS logs.
 
 Android storage access is experimental and may affect Android bootability. Bypass charging and controller-layout switching have no verified backend.
+
+The Android shared-storage view uses a kernel idmapped bind mount. The caller's
+UID and primary GID are exchanged with the raw media directory's owner IDs;
+other valid Linux IDs remain mapped to themselves. File ownership is not rewritten.
+The view is executable, nosuid and nodev, and survives hardware-service restarts
+without a userspace filesystem process. Mount, open and unmount share the same
+ownership checks. Native permissions, ACLs, chmod/chown and xattr behavior apply;
+the old FUSE permission rewriting is removed. This requires util-linux 2.39+ and
+an idmapping-capable kernel/filesystem. Unsupported mounts report an error with
+no alternate mounting backend.

@@ -1,6 +1,62 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 from gi.repository import GLib
+import pwd
 from handhelddash.services.runtime import LpUnpack, NAME, Path, STATE, dbus, json, logging, os, re, run, subprocess, threading, time
+
+USERDATA_SOURCE = Path('/mnt/android-data/media/0')
+USERDATA_VIEW = Path('/mnt/aynthor-android/userdata')
+
+
+def idmap_ranges(local_id, android_id):
+    """Swap the two identities and retain every other valid Linux ID."""
+    first, second = sorted((local_id, android_id))
+    limit = (1 << 32) - 1  # The all-ones uid/gid is invalid in a user namespace.
+    if not 0 <= first <= second < limit:
+        raise ValueError('Invalid Android shared-storage identity')
+    if first == second:
+        return [f'0:0:{limit}']
+    ranges = []
+    if first:
+        ranges.append(f'0:0:{first}')
+    ranges.append(f'{first}:{second}:1')
+    if second > first + 1:
+        ranges.append(f'{first+1}:{first+1}:{second-first-1}')
+    ranges.append(f'{second}:{first}:1')
+    if second + 1 < limit:
+        ranges.append(f'{second+1}:{second+1}:{limit-second-1}')
+    return ranges
+
+
+def userdata_mount(source=USERDATA_SOURCE, target=USERDATA_VIEW, uid=None):
+    mounted = subprocess.run(['findmnt', '-rn', '-M', str(target), '-o', 'OPTIONS'], capture_output=True, text=True)
+    if mounted.returncode:
+        return None
+    original, view = source.stat(), target.stat()
+    if 'idmapped' not in mounted.stdout.strip().split(',') or (original.st_dev, original.st_ino) != (view.st_dev, view.st_ino):
+        raise ValueError('Android shared mountpoint is in use by another filesystem')
+    if uid is not None and (view.st_uid, view.st_gid) != (uid, pwd.getpwuid(uid).pw_gid):
+        raise ValueError('Android shared mount has a different user mapping')
+    return view
+
+
+def mount_userdata_view(uid, source=USERDATA_SOURCE, target=USERDATA_VIEW):
+    if userdata_mount(source, target, uid) is not None:
+        return
+    user = pwd.getpwuid(uid)
+    owner = source.stat()
+    target.mkdir(parents=True, exist_ok=True)
+    arguments = ['mount', '--bind']
+    arguments += ['--map-users=' + value for value in idmap_ranges(uid, owner.st_uid)]
+    arguments += ['--map-groups=' + value for value in idmap_ranges(user.pw_gid, owner.st_gid)]
+    run(*arguments, str(source), str(target))
+    try:
+        run('mount', '-o', 'remount,bind,exec,nosuid,nodev', str(target))
+        if userdata_mount(source, target, uid) is None:
+            raise ValueError('Android shared-storage mount was not established')
+    except Exception:
+        run('umount', str(target))
+        raise
+
 
 class StorageService(dbus.service.Object):
     def logical_partitions(self, super_device):
@@ -31,27 +87,10 @@ class StorageService(dbus.service.Object):
         return result
 
     def userdata_view(self, uid):
-        source=Path('/mnt/android-data/media/0'); target=Path('/mnt/aynthor-android/userdata')
-        mount=subprocess.run(['findmnt','-rn','-M',str(target),'-o','FSTYPE'],capture_output=True,text=True)
-        if mount.returncode == 0:
-            if mount.stdout.strip() != 'fuse.bindfs': raise ValueError('Shared mountpoint is already in use')
-            return
-        if not source.is_dir(): raise ValueError('Android shared storage is not available')
-        target.mkdir(parents=True,exist_ok=True)
-        owner=source.stat()
-        # Keep FUSE outside hardwared's cgroup: restarting the control service
-        # must not kill an otherwise healthy Android storage view.
-        run('systemd-run','--unit=aynthor-userdata-share','--collect',
-            '--property=Type=exec','--property=Restart=on-failure',
-            '/usr/bin/bindfs','-f','--mirror-only='+str(uid),'--perms=u+rwX',
-            '--create-for-user='+str(owner.st_uid),'--create-for-group='+str(owner.st_gid),
-            '--chown-ignore','--chgrp-ignore','--chmod-ignore','--xattr-ro',
-            '-o','nosuid,nodev,noexec',str(source),str(target))
-        for _ in range(30):
-            view=subprocess.run(['findmnt','-rn','-M',str(target),'-o','FSTYPE'],capture_output=True,text=True)
-            if view.returncode == 0 and view.stdout.strip() == 'fuse.bindfs': return
-            time.sleep(0.1)
-        raise ValueError('Android shared storage service did not establish its mount')
+        if not USERDATA_SOURCE.is_dir(): raise ValueError('Android shared storage is not available')
+        # Kernel bind mounts survive hardwared restarts without a FUSE worker.
+        # Permissions, ACLs and xattrs retain their native filesystem semantics.
+        mount_userdata_view(int(uid))
 
     def userdata_status(self, device):
         base = STATE.parent/'android'
@@ -65,9 +104,15 @@ class StorageService(dbus.service.Object):
                          for name in ('aynthor_qmp','tme_overlay_loader','aynthor_tme')))
         state = run('systemctl','show','aynthor-userdata-mount.service','-p','ActiveState','--value')
         mount = subprocess.run(['findmnt','-rn','-M','/mnt/android-data','-o','FSTYPE'],capture_output=True,text=True)
+        try:
+            shared = userdata_mount()
+            shared_error = ''
+        except (OSError, ValueError) as error:
+            shared, shared_error = None, str(error)
         return {'backend_ready':ready, 'service_state':state, 'mounted':mount.returncode == 0,
-                'mountpoint':'/mnt/android-data', 'busy':self.android_lock.locked(),
-                'error':self.android_error, 'mountable':ready}
+                 'mountpoint':'/mnt/android-data', 'busy':self.android_lock.locked(),
+                'error':self.android_error or shared_error, 'mountable':ready,
+                'shared_mounted':shared is not None, 'shared_mountpoint':str(USERDATA_VIEW)}
 
     def userdata_action(self, operation, part, uid):
         if not self.android_lock.acquire(blocking=False):
@@ -78,7 +123,10 @@ class StorageService(dbus.service.Object):
                 device = part['device']
                 status = self.userdata_status(device)
                 if operation == 'mount-userdata':
-                    if status['mounted'] or status['service_state'] in ('active','activating','deactivating'):
+                    if status['mounted']:
+                        self.userdata_view(uid)
+                        return
+                    if status['service_state'] in ('active','activating','deactivating'):
                         raise ValueError('Android userdata is already mounted or changing state')
                     if not status['backend_ready']:
                         raise ValueError('Matching kernel, private keys and userdata backend are required')
@@ -96,12 +144,8 @@ class StorageService(dbus.service.Object):
                         raise ValueError('Userdata mount is not ready: '+details)
                     self.userdata_view(uid)
                 else:
-                    view=subprocess.run(['findmnt','-rn','-M','/mnt/aynthor-android/userdata','-o','FSTYPE'],capture_output=True,text=True)
-                    if view.returncode == 0:
-                        if view.stdout.strip() != 'fuse.bindfs': raise ValueError('Shared mountpoint is not owned by bindfs')
-                        run('umount','/mnt/aynthor-android/userdata')
-                    if subprocess.run(['systemctl','is-active','--quiet','aynthor-userdata-share.service']).returncode == 0:
-                        run('systemctl','stop','aynthor-userdata-share.service')
+                    if userdata_mount(uid=uid) is not None:
+                        run('umount', str(USERDATA_VIEW))
                     if status['service_state'] != 'inactive':
                         run('systemctl','stop','aynthor-userdata-mount.service',timeout=95)
                     if self.userdata_status(device)['mounted']:
