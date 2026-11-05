@@ -12,7 +12,7 @@ import shutil
 
 class KWinAdapter(DesktopAdapter):
     name = 'kwin'
-    capabilities = frozenset(('placement','window_focus','pointer_configuration','shortcuts','panel_focus','window_list','screenshot'))
+    capabilities = frozenset(('placement','window_focus','pointer_configuration','shortcuts','panel_focus','window_list','window_actions','screenshot'))
 
     def __init__(self,*args,**kwargs):
         super().__init__(*args,**kwargs)
@@ -96,6 +96,8 @@ class KWinAdapter(DesktopAdapter):
         return self.scripts.start('panel-visibility', {'operation':'panel-hide'})
 
     def shortcut(self, name):
+        if name == 'HandheldDash Gamepad Focus':
+            return self.scripts.start('gamepad-focus', {'operation':'gamepad-focus'})
         QDBusInterface('org.kde.kglobalaccel','/component/kwin','org.kde.kglobalaccel.Component',self.session).asyncCall('invokeShortcut',name)
 
     def list_windows(self):
@@ -106,6 +108,10 @@ class KWinAdapter(DesktopAdapter):
 
     def activate_window(self, identity):
         return self.scripts.start('aynthor-activate', {'operation':'activate','identity':identity})
+
+    def window_action(self, identity, action, enabled=False):
+        if action not in ('maximize','minimize','windowed','keep-above'): return False
+        return self.scripts.start('window-action', {'operation':'window-action','identity':identity,'action':action,'enabled':bool(enabled)})
 
     def stop_touchpad(self):
         self.scripts.stop('aynthor-touchpad-focus')

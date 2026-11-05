@@ -46,6 +46,9 @@ class KDEAdapter(DesktopAdapter):
     def activate_window(self, identity):
         return self._window('activate_window', identity)
 
+    def window_action(self, identity, action, enabled=False):
+        return self._window('window_action', identity, action, enabled)
+
     def stop_touchpad(self):
         return self._window('stop_touchpad')
 

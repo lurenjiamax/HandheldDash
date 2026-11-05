@@ -9,6 +9,7 @@
 - Lock top screen makes Dash non-activating. Explicit screen locks cover the opposite bare desktop with a transparent, non-focusable touch guard below ordinary applications. Automatic removes the guard. Other applications and explicit Settings can still take focus; this does not provide independent per-screen keyboard focus.
 - Dark-screen mode sets brightness to zero and exclusively inhibits that touchscreen without removing the output. The physical Dash key restores original brightness and touch. Panel scanning may continue. Client disconnection restores screens, and hardware-service restart recovers saved brightness.
 - Hold a task to select CPU affinity by touch, with per-core hardware maximum frequencies and capacity-tier shortcuts.
+- Task long-press menus provide maximize, minimize, windowed and checkable always-on-top actions on KWin. Window listing and controls execute directly through KWin scripting without a global-shortcut dispatch dependency. Windows whose process details are unavailable remain listed; process-specific actions are disabled when the process cannot be verified.
 - Joystick lighting, configurable hardware keys and optional Android storage access.
 
 Popup selections apply immediately. Tap outside to close. Dashboard edits are saved with the checkmark.

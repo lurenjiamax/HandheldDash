@@ -56,6 +56,16 @@ class TasksPageMixin:
         offset = self.task_page*6+index
         if offset >= len(self.task_records): return
         record = dict(self.task_records[offset]); menu = QMenu(self)
+        supported=self.desktop.supports('window_actions')
+        for operation,title,enabled in [('maximize','Maximize',record.get('can_maximize',True)),
+                                        ('minimize','Minimize',record.get('can_minimize',True)),
+                                        ('windowed','Windowed',True)]:
+            action=menu.addAction(tr(title)); action.setEnabled(supported and enabled)
+            action.triggered.connect(lambda checked=False,o=operation:self.task_window_action(record,o))
+        action=menu.addAction(tr('Always on top')); action.setCheckable(True)
+        action.setChecked(bool(record.get('keep_above'))); action.setEnabled(supported)
+        action.triggered.connect(lambda checked:self.task_window_action(record,'keep-above',checked))
+        menu.addSeparator()
         for role,title in [('top','Move to top screen'),('bottom','Move to bottom screen')]:
             name=DEVICE.screen_name(role,QApplication.screens())
             if not name: continue
@@ -87,6 +97,10 @@ class TasksPageMixin:
         popup.finished.connect(popup.deleteLater)
         popup.finished.connect(lambda _:popup.scrim.deleteLater())
         popup.show()
+
+    def task_window_action(self,record,operation,enabled=False):
+        if self.desktop.window_action(record['id'],operation,enabled):
+            QTimer.singleShot(400,self.refresh_tasks)
 
     def force_close_task(self,pid,started):
         self.call('Set',['kill-task',[str(pid),started]],lambda _:self.refresh_tasks())

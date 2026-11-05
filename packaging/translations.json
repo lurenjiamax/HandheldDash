@@ -1,4 +1,8 @@
 {
+  "Maximize": {"en":"Maximize","zh_CN":"最大化","zh_TW":"最大化"},
+  "Minimize": {"en":"Minimize","zh_CN":"最小化","zh_TW":"最小化"},
+  "Windowed": {"en":"Windowed","zh_CN":"窗口化","zh_TW":"視窗化"},
+  "Always on top": {"en":"Always on top","zh_CN":"总在最前","zh_TW":"保持在最上層"},
   "Volume control": {"en":"Volume control","zh_CN":"音量控制方式","zh_TW":"音量控制方式"},
   "Software volume": {"en":"Software volume","zh_CN":"软件音量","zh_TW":"軟體音量"},
   "Hardware volume": {"en":"Hardware volume","zh_CN":"硬件音量","zh_TW":"硬體音量"},
